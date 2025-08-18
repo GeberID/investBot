@@ -1,38 +1,19 @@
-# ===================================================================
-# Файлы, сгенерированные IntelliJ IDEA
-# ===================================================================
-.idea/
+/.idea
+/venv
+*.pyc
 *.iml
-*.iws
+__pycache__
+/logs
+/target/
+/screenshots/*
+/.allure
+/build
 
-# ===================================================================
-# Файлы, сгенерированные Gradle
-# ===================================================================
-.gradle/
-build/
+# Ignore Gradle project-specific cache directory
+.gradle
 
-# Игнорировать специфичные файлы Gradle
-!gradle/wrapper/gradle-wrapper.jar
-!gradle-wrapper.properties
-gradle-wrapper.properties.lock
-gradle.properties.lock
-gradlew
-gradlew.bat
-
-# ===================================================================
-# Скомпилированные классы, логи и прочий мусор
-# ===================================================================
-*.class
-*.log
-*.jar
-*.war
-*.ear
-
-# ===================================================================
-# Файлы операционной системы
-# ===================================================================
-.DS_Store
-Thumbs.db
+# Ignore Gradle build output directory
+build
 
 resources/application.properties
 application.properties
