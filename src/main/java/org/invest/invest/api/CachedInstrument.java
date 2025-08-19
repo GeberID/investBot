@@ -1,4 +1,4 @@
-package org.invest.invest;
+package org.invest.invest.api;
 
 public class CachedInstrument {
     private final String name;

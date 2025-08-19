@@ -1,13 +1,13 @@
-package org.invest.core;
+package org.invest.bot.core;
 
 import lombok.extern.slf4j.Slf4j;
-import org.invest.core.commands.PrepareMessage;
+import org.invest.bot.core.messages.PrepareMessage;
 import org.invest.core.commands.enums.Commands;
 import org.invest.core.local.RuLocal;
-import org.invest.invest.InvestApiCore;
-import org.invest.invest.Instrument;
-import org.invest.invest.KeyboardFactory;
-import org.invest.invest.PortfolioMessageFormatter;
+import org.invest.invest.api.InvestApiCore;
+import org.invest.invest.core.Instrument;
+import org.invest.bot.core.messages.KeyboardFactory;
+import org.invest.bot.core.messages.MessageFormatter;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -36,12 +36,12 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
     private final String telegramToken;
     private final TelegramClient telegramClient;
     private final InvestApiCore apiCore;
-    private final PortfolioMessageFormatter portfolioFormatter;
+    private final MessageFormatter portfolioFormatter;
     private final KeyboardFactory keyboardFactory;
 
     public TelegramBot(@Value("${telegram.token}") String telegramToken,
                        @Value("${tinkoff.readonly}") String tinkoffReadonly,
-                       PortfolioMessageFormatter portfolioFormatter,
+                       MessageFormatter portfolioFormatter,
                        KeyboardFactory keyboardFactory) {
         this.telegramToken = telegramToken;
         this.apiCore = new InvestApiCore(tinkoffReadonly);

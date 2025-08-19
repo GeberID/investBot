@@ -1,7 +1,7 @@
-package org.invest.invest;
+package org.invest.invest.api;
 
+import org.invest.invest.core.Instrument;
 import ru.tinkoff.piapi.contract.v1.Account;
-import ru.tinkoff.piapi.contract.v1.InstrumentShort;
 import ru.tinkoff.piapi.contract.v1.InstrumentStatus; // <-- 1. ДОБАВЛЕН ВАЖНЫЙ ИМПОРТ
 import ru.tinkoff.piapi.core.InvestApi;
 import ru.tinkoff.piapi.core.models.Portfolio;

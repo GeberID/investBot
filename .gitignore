@@ -16,4 +16,6 @@ __pycache__
 build
 
 resources/application.properties
-application.properties
+application.properties!/build/
+/.gradle/
+/build/

@@ -1,6 +1,5 @@
-package org.invest.invest;
+package org.invest.bot.core.messages;
 
-import org.invest.core.commands.PrepareMessage;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import java.util.LinkedHashMap;

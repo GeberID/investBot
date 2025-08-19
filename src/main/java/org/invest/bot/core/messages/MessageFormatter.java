@@ -1,5 +1,6 @@
-package org.invest.invest;
+package org.invest.bot.core.messages;
 
+import org.invest.invest.core.Instrument;
 import org.springframework.stereotype.Component;
 
 import java.text.DecimalFormat;
@@ -8,7 +9,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Component
-public class PortfolioMessageFormatter {
+public class MessageFormatter {
     /**
      * Главный метод, который генерирует полное сообщение о портфеле.
      * @param accountName Имя счета
