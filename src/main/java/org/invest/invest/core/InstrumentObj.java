@@ -4,7 +4,7 @@ import ru.tinkoff.piapi.core.models.Money;
 
 import java.math.BigDecimal;
 
-public class Instrument {
+public class InstrumentObj {
     private final String name;
     private final BigDecimal quantity;
     private final Money currentPrice;
@@ -13,7 +13,7 @@ public class Instrument {
     private final BigDecimal totalProfit;
     private final Money averageBuyPrice;
 
-    public Instrument(String name, BigDecimal quantity, Money currentPrice, String type, String ticker, BigDecimal totalProfit, Money averageBuyPrice) {
+    public InstrumentObj(String name, BigDecimal quantity, Money currentPrice, String type, String ticker, BigDecimal totalProfit, Money averageBuyPrice) {
         this.name = name;
         this.quantity = quantity;
         this.currentPrice = currentPrice;

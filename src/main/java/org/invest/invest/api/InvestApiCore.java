@@ -1,7 +1,8 @@
 package org.invest.invest.api;
 
-import org.invest.invest.core.Instrument;
+import org.invest.invest.core.InstrumentObj;
 import ru.tinkoff.piapi.contract.v1.Account;
+import ru.tinkoff.piapi.contract.v1.Instrument;
 import ru.tinkoff.piapi.contract.v1.InstrumentStatus;
 import ru.tinkoff.piapi.core.InvestApi;
 import ru.tinkoff.piapi.core.models.Portfolio;
@@ -34,51 +35,58 @@ public class InvestApiCore {
                 .orElse(null);
     }
 
-    public List<Instrument> getInstruments(Portfolio portfolio) {
-        List<Instrument> instruments = new ArrayList<>();
+    public List<InstrumentObj> getInstruments(Portfolio portfolio) {
+        List<InstrumentObj> instrumentObjs = new ArrayList<>();
         for (Position position : portfolio.getPositions()) {
             if (position.getQuantity().signum() == 0) continue;
             if (isFiatCurrency(position.getFigi())) {
-                // Если да - обрабатываем вручную, как и раньше
-                String name = getCurrencyNameByFigi(position.getFigi());
-                String ticker = position.getFigi().substring(0, 3);
-                instruments.add(new Instrument(
-                        name, position.getQuantity(), position.getCurrentPrice(), "currency", ticker,
+                instrumentObjs.add(new InstrumentObj(
+                        getCurrencyNameByFigi(position.getFigi()),
+                        position.getQuantity(),
+                        position.getCurrentPrice(),
+                        "currency",
+                        position.getFigi().substring(0, 3),
                         position.getExpectedYield(),
                         position.getAveragePositionPrice()
                 ));
             } else {
                 try {
-                    var instrumentInfo = api.getInstrumentsService().getInstrumentByFigiSync(position.getFigi());
-                    instruments.add(
-                            new Instrument(
-                                    instrumentInfo.getName(),
+                    Instrument instrumentObjInfo = api.getInstrumentsService().getInstrumentByFigiSync(position.getFigi());
+                    instrumentObjs.add(
+                            new InstrumentObj(
+                                    instrumentObjInfo.getName(),
                                     position.getQuantity(),
                                     position.getCurrentPrice(),
-                                    instrumentInfo.getInstrumentType(),
-                                    instrumentInfo.getTicker(),
+                                    instrumentObjInfo.getInstrumentType(),
+                                    instrumentObjInfo.getTicker(),
                                     position.getExpectedYield(),
                                     position.getAveragePositionPrice()
                             ));
                 } catch (Exception e) {
-                    System.err.println("Could not retrieve instrument details for FIGI: " + position.getFigi() + ". Error: " + e.getMessage());
+                    System.err.println("Could not retrieve instrument details for FIGI: " + position.getFigi() +
+                            ". Error: " + e.getMessage());
                 }
             }
         }
-        instruments.sort(Comparator.comparing(Instrument::getType).thenComparing(Instrument::getName));
-        return instruments;
+        instrumentObjs.sort(Comparator.comparing(InstrumentObj::getType).thenComparing(InstrumentObj::getName));
+        return instrumentObjs;
     }
 
     private String getCurrencyNameByFigi(String figi) {
         if (figi == null) return "Неизвестная валюта";
         switch (figi) {
             case "USD800UTSTOM":
-            case "USD000UTSTOM": return "Доллар США";
-            case "RUB000UTSTOM": return "Российский рубль";
+            case "USD000UTSTOM":
+                return "Доллар США";
+            case "RUB000UTSTOM":
+                return "Российский рубль";
             case "EUR_RUB__TOM":
-            case "EUR000UTSTOM": return "Евро";
-            case "CNYRUB_TOM": return "Китайский юань";
-            default: return "Валюта";
+            case "EUR000UTSTOM":
+                return "Евро";
+            case "CNYRUB_TOM":
+                return "Китайский юань";
+            default:
+                return "Валюта";
         }
     }
 
@@ -87,7 +95,6 @@ public class InvestApiCore {
             "RUB000UTSTOM",
             "EUR_RUB__TOM", "EUR000UTSTOM",
             "CNYRUB_TOM"
-            // Добавьте сюда другие фиатные валюты при необходимости
     );
 
     private boolean isFiatCurrency(String figi) {

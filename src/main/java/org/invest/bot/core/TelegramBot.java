@@ -7,7 +7,7 @@ import org.invest.bot.core.messages.PrepareMessage;
 import org.invest.core.commands.enums.Commands;
 import org.invest.core.local.RuLocal;
 import org.invest.invest.api.InvestApiCore;
-import org.invest.invest.core.Instrument;
+import org.invest.invest.core.InstrumentObj;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -88,8 +88,8 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
     public void portfolio(long chatId) {
         for (Account account : apiCore.getAccounts()) {
             Portfolio portfolio = apiCore.getPortfolio(account.getId());
-            List<Instrument> instruments = apiCore.getInstruments(portfolio);
-            String messageText = portfolioFormatter.format(account.getName(), instruments, portfolio, "all");
+            List<InstrumentObj> instrumentObjs = apiCore.getInstruments(portfolio);
+            String messageText = portfolioFormatter.format(account.getName(), instrumentObjs, portfolio, "all");
             InlineKeyboardMarkup keyboard = keyboardFactory.createPortfolioFilterKeyboard(account.getId());
             executeMethod(PrepareMessage.createMessage(chatId, messageText, keyboard));
         }
@@ -98,12 +98,11 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
     private void handleCallbackQuery(CallbackQuery query) {
         String data = query.getData();
         if (data == null || !data.startsWith("filter:")) {
-            return; // Если данные некорректны, выходим
+            return;
         }
-
         try {
             String[] parts = data.split(":");
-            if (parts.length < 3) return; // Проверка на корректность callback-данных
+            if (parts.length < 3) return;
 
             String filterType = parts[1];
             String accountId = parts[2];
@@ -114,15 +113,15 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
                 return;
             }
             Portfolio portfolio = apiCore.getPortfolio(accountId);
-            List<Instrument> instruments = apiCore.getInstruments(portfolio);
-            String newText = portfolioFormatter.format(account.getName(), instruments, portfolio, filterType);
+            List<InstrumentObj> instrumentObjs = apiCore.getInstruments(portfolio);
+            String newText = portfolioFormatter.format(account.getName(), instrumentObjs, portfolio, filterType);
             InlineKeyboardMarkup keyboard = keyboardFactory.createPortfolioFilterKeyboard(accountId);
 
             EditMessageText editMessage = EditMessageText.builder()
                     .chatId(query.getMessage().getChatId())
                     .messageId(query.getMessage().getMessageId())
                     .text(newText)
-                    .parseMode("HTML") // Указываем режим разметки явно
+                    .parseMode("HTML")
                     .replyMarkup(keyboard)
                     .build();
 
