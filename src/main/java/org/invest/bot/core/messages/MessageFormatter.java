@@ -29,9 +29,15 @@ public class MessageFormatter {
             sb.append("В этом портфеле пока нет активов.");
             return sb.toString();
         }
+
         Map<String, List<Instrument>> groupedInstruments = instruments.stream()
                 .collect(Collectors.groupingBy(Instrument::getType));
+
         sb.append("<pre>");
+        // --- 1. ВОЗВРАЩАЕМ СТАРЫЙ, ПРАВИЛЬНЫЙ ЗАГОЛОВОК ---
+        sb.append(String.format("%-14s %-8s %12s %12s\n", "Название", "Кол-во", "Цена", "Стоимость"));
+        sb.append("--------------------------------------------------\n");
+
         for (Map.Entry<String, List<Instrument>> entry : groupedInstruments.entrySet()) {
             String currentType = entry.getKey();
             if (!filterType.equals("all") && !currentType.equals(filterType)) {
@@ -39,7 +45,8 @@ public class MessageFormatter {
             }
             sb.append("\n<b>").append(getFriendlyTypeName(currentType)).append("</b>\n");
             for (Instrument instrument : entry.getValue()) {
-                sb.append(formatInstrumentLine(instrument));
+                // --- 2. ИСПОЛЬЗУЕМ НОВЫЙ ДВУХСТРОЧНЫЙ ФОРМАТ ---
+                sb.append(formatInstrumentMultiLine(instrument));
             }
         }
         sb.append("</pre>");
@@ -48,10 +55,54 @@ public class MessageFormatter {
     }
 
     /**
+     * НОВЫЙ МЕТОД: Форматирует информацию об инструменте в две строки.
+     * 1-я строка: Название, Кол-во, Цена, Стоимость.
+     * 2-я строка: Отступ и информация о прибыли (P/L).
+     */
+    private String formatInstrumentMultiLine(Instrument instrument) {
+        StringBuilder sb = new StringBuilder();
+        DecimalFormat qtyFormat = new DecimalFormat("#,###.##");
+        DecimalFormat priceFormat = new DecimalFormat("#,##0.00");
+
+        // --- ДАННЫЕ ДЛЯ ПЕРВОЙ СТРОКИ (КАК БЫЛО РАНЬШЕ) ---
+        String name = instrument.getName();
+        if (name.length() > 13) {
+            name = name.substring(0, 12) + ".";
+        }
+        String quantityStr = qtyFormat.format(instrument.getQuantity());
+        String priceStr = priceFormat.format(instrument.getCurrentPrice().getValue()) + getCurrencySymbol(instrument.getCurrentPrice().getCurrency());
+        String totalPriceStr = priceFormat.format(instrument.getCurrentPrice().getValue().multiply(instrument.getQuantity())) + getCurrencySymbol(instrument.getCurrentPrice().getCurrency());
+
+        // Формируем первую строку
+        sb.append(String.format("%-14s %-8s %12s %12s\n", name, quantityStr, priceStr, totalPriceStr));
+
+        // --- ДАННЫЕ ДЛЯ ВТОРОЙ СТРОКИ (ИНФОРМАЦИЯ О ПРИБЫЛИ) ---
+        BigDecimal profitValue = instrument.getTotalProfit();
+        Money averageBuyPrice = instrument.getAverageBuyPrice();
+        // Не показываем строку P/L для фиатных валют или если данных нет
+        if (profitValue != null && profitValue.signum() != 0) {
+            BigDecimal totalInvested = instrument.getAverageBuyPrice().getValue().multiply(instrument.getQuantity());
+
+            BigDecimal profitPercentage = BigDecimal.ZERO;
+            if (totalInvested.signum() != 0) {
+                profitPercentage = profitValue.multiply(BigDecimal.valueOf(100))
+                        .divide(totalInvested, 2, RoundingMode.HALF_UP);
+            }
+            String profitCurrencySymbol = getCurrencySymbol(averageBuyPrice.getCurrency());
+            String profitStr = formatProfit(profitValue, profitCurrencySymbol);
+            String percentageStr = formatPercentage(profitPercentage);
+
+            sb.append(String.format("  └ P/L: %s (%s)\n", profitStr, percentageStr));
+        }
+        return sb.toString();
+    }
+
+    /**
      * Генерирует текстовый блок со структурой портфеля в процентах.
      */
     private String generateAllocationSummary(Portfolio portfolio) {
         BigDecimal totalValue = portfolio.getTotalAmountPortfolio().getValue();
+        String currency = portfolio.getTotalAmountPortfolio().getCurrency();
         // Если портфель пустой, не показываем блок
         if (totalValue.signum() == 0) {
             return "";
@@ -65,12 +116,8 @@ public class MessageFormatter {
         addAssetAllocationLine(summary, "Облигации \uD83D\uDCDC", portfolio.getTotalAmountBonds(), totalValue);
         addAssetAllocationLine(summary, "Фонды \uD83D\uDDA5️", portfolio.getTotalAmountEtfs(), totalValue);
         addAssetAllocationLine(summary, "Валюта \uD83D\uDCB0", portfolio.getTotalAmountCurrencies(), totalValue);
-        addAssetAllocationLine(summary,"\n<b>Стоимость</b> - %s\n",portfolio.getTotalAmountPortfolio().getValue());
-        addAssetAllocationLine(summary,"\n<b>Акции</b> - %s",portfolio.getTotalAmountShares().getValue());
-        addAssetAllocationLine(summary,"\n<b>Облигации</b> - %s",portfolio.getTotalAmountBonds().getValue());
-        addAssetAllocationLine(summary,"\n<b>Фонды</b> - %s",portfolio.getTotalAmountEtfs().getValue());
-        addAssetAllocationLine(summary,"\n<b>Валюта</b> - %s",portfolio.getTotalAmountCurrencies().getValue());
-        addAssetAllocationLine(summary,"\n\n<b>Профит</b> - %s%%",portfolio.getExpectedYield());
+        addAssetAllocationLine(summary, "<b>Стоимость</b>: %s " + currency + "\n", totalValue);
+        addAssetAllocationLine(summary, "<b>Профит</b>: %s%%", portfolio.getExpectedYield());
         return summary.toString();
     }
 
@@ -95,12 +142,13 @@ public class MessageFormatter {
             BigDecimal percentage = amount.getValue()
                     .multiply(new BigDecimal(100))
                     .divide(total, 2, RoundingMode.HALF_UP);
-            sb.append(String.format("%-15s %s%%\n", name + ":", percentage));
+            sb.append(String.format("%-15s %s - %s%%\n", name + ":", amount.getValue().setScale(2, RoundingMode.HALF_UP), percentage));
         }
     }
+
     private void addAssetAllocationLine(StringBuilder sb, String stringFormat, BigDecimal bigDecimal) {
         if (bigDecimal != null && bigDecimal.signum() != 0) {
-            sb.append(String.format(stringFormat,bigDecimal.setScale(2, RoundingMode.HALF_UP)));
+            sb.append(String.format(stringFormat, bigDecimal.setScale(2, RoundingMode.HALF_UP)));
         }
     }
 
@@ -119,19 +167,28 @@ public class MessageFormatter {
         }
     }
 
-    private String formatInstrumentLine(Instrument instrument) {
-        DecimalFormat qtyFormat = new DecimalFormat("#,###.##");
-        DecimalFormat priceFormat = new DecimalFormat("#,##0.00");
+    private String formatProfit(BigDecimal value, String currencySymbol) {
+        DecimalFormat profitFormat = new DecimalFormat("#,##0"); // Формат без копеек для краткости
+        String formattedValue = profitFormat.format(value);
+        if (value.signum() > 0) {
+            return "+" + formattedValue + currencySymbol;
+        }
+        return formattedValue + currencySymbol; // Минус будет добавлен автоматически
+    }
 
-        String name = instrument.getName();
-        if (name.length() > 13) {
-            name = name.substring(0, 12) + ".";
+    /**
+     * Форматирует процент, добавляя знак, эмодзи и символ %.
+     */
+    private String formatPercentage(BigDecimal percentage) {
+        String emoji = "";
+        String sign = "";
+        if (percentage.signum() > 0) {
+            emoji = "\uD83D\uDCC8"; // 📈
+            sign = "+";
+        } else if (percentage.signum() < 0) {
+            emoji = "\uD83D\uDCC9"; // 📉
         }
 
-        String quantityStr = qtyFormat.format(instrument.getQuantity());
-        String priceStr = priceFormat.format(instrument.getCurrentPrice().getValue()) + getCurrencySymbol(instrument.getCurrentPrice().getCurrency());
-        String totalPriceStr = priceFormat.format(instrument.getCurrentPrice().getValue().multiply(instrument.getQuantity())) + getCurrencySymbol(instrument.getCurrentPrice().getCurrency());
-
-        return String.format("%-14s %-8s %12s %12s\n", name, quantityStr, priceStr,totalPriceStr);
+        return String.format("%s%s%s%%", emoji, sign, percentage.abs());
     }
 }

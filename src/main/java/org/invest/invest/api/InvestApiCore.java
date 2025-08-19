@@ -43,7 +43,9 @@ public class InvestApiCore {
                 String name = getCurrencyNameByFigi(position.getFigi());
                 String ticker = position.getFigi().substring(0, 3);
                 instruments.add(new Instrument(
-                        name, position.getQuantity(), position.getCurrentPrice(), "currency", ticker
+                        name, position.getQuantity(), position.getCurrentPrice(), "currency", ticker,
+                        position.getExpectedYield(),
+                        position.getAveragePositionPrice()
                 ));
             } else {
                 try {
@@ -54,7 +56,9 @@ public class InvestApiCore {
                                     position.getQuantity(),
                                     position.getCurrentPrice(),
                                     instrumentInfo.getInstrumentType(),
-                                    instrumentInfo.getTicker()
+                                    instrumentInfo.getTicker(),
+                                    position.getExpectedYield(),
+                                    position.getAveragePositionPrice()
                             ));
                 } catch (Exception e) {
                     System.err.println("Could not retrieve instrument details for FIGI: " + position.getFigi() + ". Error: " + e.getMessage());
