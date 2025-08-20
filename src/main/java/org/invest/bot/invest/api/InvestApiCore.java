@@ -1,6 +1,6 @@
-package org.invest.invest.api;
+package org.invest.bot.invest.api;
 
-import org.invest.invest.core.objects.InstrumentObj;
+import org.invest.bot.invest.core.objects.InstrumentObj;
 import ru.tinkoff.piapi.contract.v1.Account;
 import ru.tinkoff.piapi.contract.v1.Instrument;
 import ru.tinkoff.piapi.contract.v1.InstrumentStatus;
@@ -38,7 +38,6 @@ public class InvestApiCore {
     public List<InstrumentObj> getInstruments(Portfolio portfolio) {
         List<InstrumentObj> instrumentObjs = new ArrayList<>();
         for (Position position : portfolio.getPositions()) {
-            if (position.getQuantity().signum() == 0) continue;
             if (isFiatCurrency(position.getFigi())) {
                 instrumentObjs.add(new InstrumentObj(
                         getCurrencyNameByFigi(position.getFigi()),
@@ -103,7 +102,6 @@ public class InvestApiCore {
     }
 
     private void warmUpCache() {
-        System.out.println("Warming up instrument cache...");
         try {
             api.getInstrumentsService().getSharesSync(InstrumentStatus.INSTRUMENT_STATUS_BASE).forEach(share ->
                     instrumentCache.put(share.getFigi(), new CachedInstrument(share.getName(), share.getTicker())));
@@ -116,7 +114,6 @@ public class InvestApiCore {
 
             api.getInstrumentsService().getCurrenciesSync(InstrumentStatus.INSTRUMENT_STATUS_BASE).forEach(currency ->
                     instrumentCache.put(currency.getFigi(), new CachedInstrument(currency.getName(), currency.getTicker())));
-
         } catch (Exception e) {
             System.err.println("FATAL: Failed to warm up instrument cache. Error: " + e.getMessage());
         }

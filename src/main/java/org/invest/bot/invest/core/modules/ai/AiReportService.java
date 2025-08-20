@@ -1,13 +1,12 @@
-package org.invest.invest.core.modules.ai;
+package org.invest.bot.invest.core.modules.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.invest.invest.api.InvestApiCore;
-import org.invest.invest.core.modules.balanse.BalanceModuleConf;
-import org.invest.invest.core.modules.balanse.BalanceService;
-import org.invest.invest.core.objects.InstrumentObj;
-import org.springframework.stereotype.Service;
+import org.invest.bot.invest.api.InvestApiCore;
+import org.invest.bot.invest.core.modules.balanse.BalanceModuleConf;
+import org.invest.bot.invest.core.modules.balanse.BalanceService;
+import org.invest.bot.invest.core.objects.InstrumentObj;
 import ru.tinkoff.piapi.contract.v1.Account;
 import ru.tinkoff.piapi.core.models.Portfolio;
 

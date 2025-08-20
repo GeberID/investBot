@@ -1,8 +1,8 @@
 package org.invest.bot.core.messages;
 
-import org.invest.invest.core.modules.balanse.AnalysisResult;
-import org.invest.invest.core.modules.balanse.BalanceModuleConf;
-import org.invest.invest.core.objects.InstrumentObj;
+import org.invest.bot.invest.core.modules.balanse.AnalysisResult;
+import org.invest.bot.invest.core.modules.balanse.BalanceModuleConf;
+import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Component;
 import ru.tinkoff.piapi.core.models.Money;
 import ru.tinkoff.piapi.core.models.Portfolio;

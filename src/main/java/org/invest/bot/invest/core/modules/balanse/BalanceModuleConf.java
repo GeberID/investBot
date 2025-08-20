@@ -1,4 +1,4 @@
-package org.invest.invest.core.modules.balanse;
+package org.invest.bot.invest.core.modules.balanse;
 
 import lombok.AllArgsConstructor;
 
@@ -11,7 +11,7 @@ public enum BalanceModuleConf {
     TARGET_BOND_PERCENTAGE(BigDecimal.valueOf(45.0)),
     TARGET_PROTECTION_PERCENTAGE(BigDecimal.valueOf(10.0)),
     TARGET_RESERVE_PERCENTAGE(BigDecimal.valueOf(5.0)),
-    SATELLITE_CONCENTRATION_LIMIT(BigDecimal.valueOf(5.0)),
+    SATELLITE_CONCENTRATION_LIMIT(BigDecimal.valueOf(6.0)),
     ALLOCATION_TOLERANCE(BigDecimal.valueOf(2.0));
 
     public BigDecimal value;

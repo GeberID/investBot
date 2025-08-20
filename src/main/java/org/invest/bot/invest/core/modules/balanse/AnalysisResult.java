@@ -1,4 +1,4 @@
-package org.invest.invest.core.modules.balanse;
+package org.invest.bot.invest.core.modules.balanse;
 
 import java.math.BigDecimal;
 import java.util.List;
