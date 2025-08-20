@@ -15,7 +15,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.invest.bot.core.DataConvertUtility.getPercentCount;
-import static org.invest.invest.core.modules.balanse.BalanceModuleConf.*;
 
 @Component
 public class MessageFormatter {

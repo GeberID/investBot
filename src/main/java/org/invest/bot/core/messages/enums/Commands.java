@@ -3,7 +3,8 @@ package org.invest.bot.core.messages.enums;
 public enum Commands {
     start("/start"),
     portfolio("/portfolio"),
-    analyze("/analyze");
+    analyze("/analyze"),
+    exp("/exp");
 
     private final String command;
     Commands(String command) {

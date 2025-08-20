@@ -47,8 +47,8 @@ public class InvestApiCore {
                         "currency",
                         position.getFigi().substring(0, 3),
                         position.getExpectedYield(),
-                        position.getAveragePositionPrice()
-                ));
+                        position.getAveragePositionPrice(),
+                        position.getFigi()));
             } else {
                 try {
                     Instrument instrumentObjInfo = api.getInstrumentsService().getInstrumentByFigiSync(position.getFigi());
@@ -60,7 +60,8 @@ public class InvestApiCore {
                                     instrumentObjInfo.getInstrumentType(),
                                     instrumentObjInfo.getTicker(),
                                     position.getExpectedYield(),
-                                    position.getAveragePositionPrice()
+                                    position.getAveragePositionPrice(),
+                                    position.getFigi()
                             ));
                 } catch (Exception e) {
                     System.err.println("Could not retrieve instrument details for FIGI: " + position.getFigi() +

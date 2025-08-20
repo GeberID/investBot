@@ -18,9 +18,6 @@ import static org.invest.invest.core.modules.balanse.BalanceModuleConf.*;
 @Service
 public class BalanceService {
 
-    public BalanceService() {
-    }
-
     public AnalysisResult findTotalDeviation(Portfolio portfolio, List<InstrumentObj> instrumentObjs) {
         Map<BalanceModuleConf, BigDecimal> classDeviations = new HashMap<>();
         List<String> concentrationProblems = new ArrayList<>(); // Список для проблем концентрации
@@ -73,7 +70,6 @@ public class BalanceService {
                 BigDecimal positionValue = inst.getQuantity().multiply(inst.getCurrentPrice().getValue());
                 BigDecimal percentage = getPercentCount(totalValue, positionValue);
 
-                // ИСПОЛЬЗУЕМ ВАШ СУЩЕСТВУЮЩИЙ ЛИМИТ
                 if (percentage.compareTo(SATELLITE_CONCENTRATION_LIMIT.value) > 0) {
                     // Формируем понятную строку и добавляем в наш список
                     String problem = String.format(
@@ -86,6 +82,40 @@ public class BalanceService {
         }
 
         return new AnalysisResult(classDeviations, concentrationProblems);
+    }
+
+    public Map<BalanceModuleConf, BigDecimal> calculateActualDistribution(Portfolio portfolio, List<InstrumentObj> instrumentObjs) {
+        Map<BalanceModuleConf, BigDecimal> distribution = new HashMap<>();
+        Money totalValue = portfolio.getTotalAmountPortfolio();
+        if (totalValue.getValue().signum() == 0) {
+            return distribution;
+        }
+
+        BigDecimal coreStockValue = BigDecimal.ZERO;
+        BigDecimal satelliteStockValue = BigDecimal.ZERO;
+        BigDecimal bondsValue = portfolio.getTotalAmountBonds().getValue();
+        BigDecimal reserveValue = BigDecimal.ZERO;
+        BigDecimal protectionValue = BigDecimal.ZERO;
+
+        for (InstrumentObj inst : instrumentObjs) {
+            BigDecimal positionValue = inst.getQuantity().multiply(inst.getCurrentPrice().getValue());
+            if (getCoreStockTicket().equals(inst.getTicker())) {
+                coreStockValue = positionValue;
+            } else if ("share".equals(inst.getType())) {
+                satelliteStockValue = satelliteStockValue.add(positionValue);
+            } else if (getReserveTickets().contains(inst.getTicker())) {
+                reserveValue = reserveValue.add(positionValue);
+            } else if (getProtectionTickets().contains(inst.getTicker())) {
+                protectionValue = protectionValue.add(positionValue);
+            }
+        }
+        distribution.put(TARGET_STOCK_CORE_PERCENTAGE, getPercentCount(totalValue, coreStockValue));
+        distribution.put(TARGET_STOCK_SATELLITE__PERCENTAGE, getPercentCount(totalValue, satelliteStockValue));
+        distribution.put(TARGET_BOND_PERCENTAGE, getPercentCount(totalValue, bondsValue));
+        distribution.put(TARGET_PROTECTION_PERCENTAGE, getPercentCount(totalValue, protectionValue));
+        distribution.put(TARGET_RESERVE_PERCENTAGE, getPercentCount(totalValue, reserveValue));
+
+        return distribution;
     }
 
     /**

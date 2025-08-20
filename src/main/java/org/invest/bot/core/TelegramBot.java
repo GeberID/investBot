@@ -7,8 +7,8 @@ import org.invest.bot.core.messages.MessageFormatter;
 import org.invest.bot.core.messages.PrepareMessage;
 import org.invest.bot.core.messages.enums.Commands;
 import org.invest.invest.api.InvestApiCore;
+import org.invest.invest.core.modules.ai.AiReportService;
 import org.invest.invest.core.modules.balanse.AnalysisResult;
-import org.invest.invest.core.modules.balanse.BalanceModuleConf;
 import org.invest.invest.core.modules.balanse.BalanceService;
 import org.invest.invest.core.objects.InstrumentObj;
 import org.jetbrains.annotations.NotNull;
@@ -22,8 +22,10 @@ import org.telegram.telegrambots.longpolling.starter.AfterBotRegistration;
 import org.telegram.telegrambots.longpolling.starter.SpringLongPollingBot;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
 import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethod;
+import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -32,10 +34,9 @@ import org.telegram.telegrambots.meta.generics.TelegramClient;
 import ru.tinkoff.piapi.contract.v1.Account;
 import ru.tinkoff.piapi.core.models.Portfolio;
 
-import java.math.BigDecimal;
+import java.io.File;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 @Component
 @Slf4j
@@ -48,20 +49,23 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
     private final KeyboardFactory keyboardFactory;
     private final BalanceService balanceService;
     private AnalysisResult lastSentDeviations;
+    private final AiReportService aiReportService;
     private Long userChatId;
+
     public TelegramBot(@Value("${telegram.token}") String telegramToken,
                        @Value("${tinkoff.readonly}") String tinkoffReadonly,
                        MessageFormatter messageFormatter,
                        KeyboardFactory keyboardFactory,
-                       BalanceService balanceService) {
+                       BalanceService balanceService
+                       ) {
         this.telegramToken = telegramToken;
         this.apiCore = new InvestApiCore(tinkoffReadonly);
         this.telegramClient = new OkHttpTelegramClient(this.telegramToken);
         this.messageFormatter = messageFormatter;
         this.keyboardFactory = keyboardFactory;
         this.balanceService = balanceService;
+        this.aiReportService = new AiReportService(this.apiCore, this.balanceService);
     }
-
     @Override
     public String getBotToken() {
         return telegramToken;
@@ -93,6 +97,7 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
             case start -> processStartCommand(message.getChatId(), message.getChat().getUserName());
             case portfolio -> portfolio();
             case analyze -> analyzeCommand();
+            case exp ->exportForAi();
         }
     }
 
@@ -110,6 +115,37 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
         if (!checkChatId()) return;
         log.info("Запуск анализа по ручной команде для chatId {}", userChatId);
         performAnalysisAndNotify(false);
+    }
+
+    public void exportForAi() {
+        try {
+            log.info("Запрос на экспорт данных для AI от chatId {}", userChatId);
+            File reportFile = aiReportService.generateReportFile();
+
+            InputFile inputFile = new InputFile(reportFile);
+
+            // Затем создаем SendDocument, передавая обязательные параметры
+            SendDocument sendDocument = new SendDocument(String.valueOf(userChatId), inputFile);
+
+            // Настраиваем опциональные параметры через сеттеры
+            sendDocument.setCaption("Отчет по портфелю для анализа нейросетью.");
+
+            try {
+                telegramClient.execute(sendDocument);
+            } catch (TelegramApiException e) {
+                log.error("Telegram API execution error: {}", e.getMessage(), e);
+            }
+
+            // Важно: после отправки временный файл нужно удалить
+            if (reportFile.delete()) {
+                log.info("Временный файл отчета удален: {}", reportFile.getName());
+            }
+
+        } catch (Exception e) {
+            log.error("Не удалось создать или отправить AI-отчет для chatId {}: {}", userChatId, e.getMessage());
+            // Отправляем сообщение об ошибке пользователю
+            executeMethod(PrepareMessage.createMessage(userChatId, "Произошла ошибка при создании отчета."));
+        }
     }
 
     @Scheduled(cron = "0 0 13 * * MON-FRI")
