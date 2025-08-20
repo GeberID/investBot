@@ -6,6 +6,8 @@ import ru.tinkoff.piapi.core.models.Money;
 import ru.tinkoff.piapi.core.models.Portfolio;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,16 +21,14 @@ public class BalanceService {
     public BalanceService() {
     }
 
-    public Map<BalanceModuleConf, BigDecimal> findTotalDeviation(Portfolio portfolio, List<InstrumentObj> instrumentObjs) {
-        Map<BalanceModuleConf, BigDecimal> deviations = new HashMap<>();
+    public AnalysisResult findTotalDeviation(Portfolio portfolio, List<InstrumentObj> instrumentObjs) {
+        Map<BalanceModuleConf, BigDecimal> classDeviations = new HashMap<>();
+        List<String> concentrationProblems = new ArrayList<>(); // Список для проблем концентрации
         Money totalValue = portfolio.getTotalAmountPortfolio();
-        if (totalValue.getValue().signum() == 0) {
-            return deviations;
-        }
 
-        // --- ШАГ 1: ОПТИМИЗАЦИЯ ---
-        // Рассчитаем все необходимые нам суммы ЗАРАНЕЕ, за один проход по списку.
-        // Это позволяет избежать многократной фильтрации внутри switch-case.
+        if (totalValue.getValue().signum() == 0) {
+            return new AnalysisResult(classDeviations, concentrationProblems); // Возвращаем пустой результат
+        }
         BigDecimal coreStockValue = BigDecimal.ZERO;
         BigDecimal reserveValue = BigDecimal.ZERO;
         BigDecimal protectionValue = BigDecimal.ZERO;
@@ -44,8 +44,6 @@ public class BalanceService {
             }
         }
 
-        // --- ШАГ 2: ВАША ЛЮБИМАЯ КОНСТРУКЦИЯ ---
-        // Теперь мы итерируемся по enum и используем уже готовые, рассчитанные значения.
         for (BalanceModuleConf target : BalanceModuleConf.values()) {
             BigDecimal currentValue = BigDecimal.ZERO; // Значение текущей категории
 
@@ -54,27 +52,40 @@ public class BalanceService {
                     currentValue = portfolio.getTotalAmountBonds().getValue();
                     break;
                 case TARGET_STOCK_CORE_PERCENTAGE:
-                    currentValue = coreStockValue; // Берем заранее рассчитанное значение
+                    currentValue = coreStockValue;
                     break;
                 case TARGET_STOCK_SATELLITE__PERCENTAGE:
                     currentValue = portfolio.getTotalAmountShares().getValue();
                     break;
                 case TARGET_RESERVE_PERCENTAGE:
-                    currentValue = reserveValue; // Берем заранее рассчитанное значение
+                    currentValue = reserveValue;
                     break;
                 case TARGET_PROTECTION_PERCENTAGE:
-                    currentValue = protectionValue; // Берем заранее рассчитанное значение
+                    currentValue = protectionValue;
                     break;
-                // Пропускаем константы, которые не являются целевыми долями
-                case SATELLITE_CONCENTRATION_LIMIT:
-                case ALLOCATION_TOLERANCE:
-                    continue; // Переходим к следующему элементу enum
+                case SATELLITE_CONCENTRATION_LIMIT, ALLOCATION_TOLERANCE: continue;
             }
+            checkAndAddDeviation(classDeviations, target, currentValue, totalValue);
+        }
+        for (InstrumentObj inst : instrumentObjs) {
+            // Проверяем только акции, которые не являются "Ядром"
+            if ("share".equals(inst.getType()) && !getCoreStockTicket().equals(inst.getTicker())) {
+                BigDecimal positionValue = inst.getQuantity().multiply(inst.getCurrentPrice().getValue());
+                BigDecimal percentage = getPercentCount(totalValue, positionValue);
 
-            checkAndAddDeviation(deviations, target, currentValue, totalValue);
+                // ИСПОЛЬЗУЕМ ВАШ СУЩЕСТВУЮЩИЙ ЛИМИТ
+                if (percentage.compareTo(SATELLITE_CONCENTRATION_LIMIT.value) > 0) {
+                    // Формируем понятную строку и добавляем в наш список
+                    String problem = String.format(
+                            "‼️ <b>Риск концентрации:</b> доля '%s' (<b>%s%%</b>) превышает лимит в <b>%s%%</b>!",
+                            inst.getName(), percentage.setScale(2, RoundingMode.HALF_UP), SATELLITE_CONCENTRATION_LIMIT.value
+                    );
+                    concentrationProblems.add(problem);
+                }
+            }
         }
 
-        return deviations;
+        return new AnalysisResult(classDeviations, concentrationProblems);
     }
 
     /**

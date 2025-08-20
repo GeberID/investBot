@@ -1,5 +1,7 @@
 package org.invest.bot.core.messages;
 
+import org.invest.invest.core.modules.balanse.AnalysisResult;
+import org.invest.invest.core.modules.balanse.BalanceModuleConf;
 import org.invest.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Component;
 import ru.tinkoff.piapi.core.models.Money;
@@ -13,6 +15,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.invest.bot.core.DataConvertUtility.getPercentCount;
+import static org.invest.invest.core.modules.balanse.BalanceModuleConf.*;
 
 @Component
 public class MessageFormatter {
@@ -50,6 +53,76 @@ public class MessageFormatter {
         sb.append("</pre>");
         sb.append(generateAllocationSummary(portfolio));
         return sb.toString();
+    }
+
+    /**
+     * НОВЫЙ ПУБЛИЧНЫЙ МЕТОД
+     * Форматирует отчет о стратегических отклонениях.
+     * @param result Карта с отклонениями от BalanceService.
+     * @return Готовый к отправке текст сообщения.
+     */
+    public String formatBalanceDeviations(AnalysisResult result) {
+        if (!result.hasDeviations()) {
+            return "✅ <b>Стратегический анализ портфеля</b>\n\n" +
+                    "Отклонений от вашей стратегии не обнаружено.";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("️️️️️️️️️️️️️️️<b>Cтратегический анализ портфеля</b>\n\nОбнаружены следующие отклонения:\n");
+        for (Map.Entry<BalanceModuleConf, BigDecimal> entry : result.classDeviations.entrySet()){
+            BalanceModuleConf target = entry.getKey();
+            BigDecimal fact = entry.getValue();
+            sb.append("\n• ").append(formatDeviationLine(target, fact));
+        }
+        for (String problem : result.concentrationProblems) {
+            sb.append("\n• ").append(problem);
+        }
+        sb.append("\n\n<i>Рекомендуется провести ребалансировку.</i>");
+        return sb.toString();
+    }
+
+    /**
+     * Возвращает символ валюты по ее коду
+     */
+    public String getCurrencySymbol(String currencyCode) {
+        switch (currencyCode.toUpperCase()) {
+            case "RUB":
+                return "₽";
+            case "USD":
+                return "$";
+            case "EUR":
+                return "€";
+            default:
+                return " " + currencyCode;
+        }
+    }
+
+    /**
+     * НОВЫЙ ПРИВАТНЫЙ МЕТОД
+     * Форматирует одну строку для отчета об отклонениях.
+     */
+    private String formatDeviationLine(BalanceModuleConf target, BigDecimal fact) {
+        String name = getFriendlyNameForTarget(target);
+        String direction = fact.compareTo(target.value) > 0 ? "превышает" : "ниже";
+
+        return String.format(
+                "<b>%s:</b> фактическая доля (<b>%s%%</b>) %s цели (<b>%s%%</b>)",
+                name, fact, direction, target.value
+        );
+    }
+
+    /**
+     * НОВЫЙ ПРИВАТНЫЙ МЕТОД
+     * Возвращает человекочитаемое имя для целевого показателя.
+     */
+    private String getFriendlyNameForTarget(BalanceModuleConf target) {
+        switch (target) {
+            case TARGET_STOCK_CORE_PERCENTAGE: return "Акции (Ядро)";
+            case TARGET_STOCK_SATELLITE__PERCENTAGE: return "Акции (Спутники)";
+            case TARGET_BOND_PERCENTAGE: return "Облигации";
+            case TARGET_PROTECTION_PERCENTAGE: return "Защита";
+            case TARGET_RESERVE_PERCENTAGE: return "Резерв";
+            default: return "Неизвестная категория";
+        }
     }
 
     /**
@@ -106,22 +179,6 @@ public class MessageFormatter {
         addAssetAllocationLine(summary, "<b>Стоимость</b>: %s " + currency + "\n", totalValue.getValue());
         addAssetAllocationLine(summary, "<b>Профит</b>: %s%%", portfolio.getExpectedYield());
         return summary.toString();
-    }
-
-    /**
-     * Возвращает символ валюты по ее коду
-     */
-    public String getCurrencySymbol(String currencyCode) {
-        switch (currencyCode.toUpperCase()) {
-            case "RUB":
-                return "₽";
-            case "USD":
-                return "$";
-            case "EUR":
-                return "€";
-            default:
-                return " " + currencyCode;
-        }
     }
 
     private void addAssetAllocationLine(StringBuilder sb, String name, Money amount, Money total) {

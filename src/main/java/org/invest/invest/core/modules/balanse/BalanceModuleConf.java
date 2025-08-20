@@ -14,7 +14,7 @@ public enum BalanceModuleConf {
     SATELLITE_CONCENTRATION_LIMIT(BigDecimal.valueOf(5.0)),
     ALLOCATION_TOLERANCE(BigDecimal.valueOf(2.0));
 
-    BigDecimal value;
+    public BigDecimal value;
 
     /** Акции, входящие в "Ядро" (индексные фонды) */
     public static String getCoreStockTicket() {
