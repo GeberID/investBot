@@ -1,6 +1,6 @@
 package org.invest.bot.core.messages;
 
-import org.invest.invest.core.InstrumentObj;
+import org.invest.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Component;
 import ru.tinkoff.piapi.core.models.Money;
 import ru.tinkoff.piapi.core.models.Portfolio;
@@ -11,6 +11,8 @@ import java.text.DecimalFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.invest.bot.core.DataConvertUtility.getPercentCount;
 
 @Component
 public class MessageFormatter {
@@ -90,9 +92,9 @@ public class MessageFormatter {
      * Генерирует текстовый блок со структурой портфеля в процентах.
      */
     private String generateAllocationSummary(Portfolio portfolio) {
-        BigDecimal totalValue = portfolio.getTotalAmountPortfolio().getValue();
+        Money totalValue = portfolio.getTotalAmountPortfolio();
         String currency = portfolio.getTotalAmountPortfolio().getCurrency();
-        if (totalValue.signum() == 0) {
+        if (totalValue.getValue().signum() == 0) {
             return "";
         }
         StringBuilder summary = new StringBuilder();
@@ -101,7 +103,7 @@ public class MessageFormatter {
         addAssetAllocationLine(summary, "Облигации \uD83D\uDCDC", portfolio.getTotalAmountBonds(), totalValue);
         addAssetAllocationLine(summary, "Фонды \uD83D\uDDA5️", portfolio.getTotalAmountEtfs(), totalValue);
         addAssetAllocationLine(summary, "Валюта \uD83D\uDCB0", portfolio.getTotalAmountCurrencies(), totalValue);
-        addAssetAllocationLine(summary, "<b>Стоимость</b>: %s " + currency + "\n", totalValue);
+        addAssetAllocationLine(summary, "<b>Стоимость</b>: %s " + currency + "\n", totalValue.getValue());
         addAssetAllocationLine(summary, "<b>Профит</b>: %s%%", portfolio.getExpectedYield());
         return summary.toString();
     }
@@ -122,13 +124,10 @@ public class MessageFormatter {
         }
     }
 
-    private void addAssetAllocationLine(StringBuilder sb, String name, Money amount, BigDecimal total) {
+    private void addAssetAllocationLine(StringBuilder sb, String name, Money amount, Money total) {
         if (amount != null && amount.getValue().signum() != 0) {
-            BigDecimal percentage = amount.getValue()
-                    .multiply(new BigDecimal(100))
-                    .divide(total, 2, RoundingMode.HALF_UP);
             sb.append(String.format("%-15s %s - %s%%\n", name + ":", amount.getValue()
-                    .setScale(2, RoundingMode.HALF_UP), percentage));
+                    .setScale(2, RoundingMode.HALF_UP), getPercentCount(total,amount)));
         }
     }
 

@@ -4,10 +4,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.invest.bot.core.messages.KeyboardFactory;
 import org.invest.bot.core.messages.MessageFormatter;
 import org.invest.bot.core.messages.PrepareMessage;
-import org.invest.core.commands.enums.Commands;
-import org.invest.core.local.RuLocal;
+import org.invest.bot.core.messages.enums.Commands;
+import org.invest.bot.core.local.RuLocal;
 import org.invest.invest.api.InvestApiCore;
-import org.invest.invest.core.InstrumentObj;
+import org.invest.invest.core.modules.balanse.BalanceService;
+import org.invest.invest.core.objects.InstrumentObj;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -40,16 +41,19 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
     private final InvestApiCore apiCore;
     private final MessageFormatter portfolioFormatter;
     private final KeyboardFactory keyboardFactory;
+    private final BalanceService balanceService;
 
     public TelegramBot(@Value("${telegram.token}") String telegramToken,
                        @Value("${tinkoff.readonly}") String tinkoffReadonly,
                        MessageFormatter portfolioFormatter,
-                       KeyboardFactory keyboardFactory) {
+                       KeyboardFactory keyboardFactory,
+                       BalanceService balanceService) {
         this.telegramToken = telegramToken;
         this.apiCore = new InvestApiCore(tinkoffReadonly);
         this.telegramClient = new OkHttpTelegramClient(this.telegramToken);
         this.portfolioFormatter = portfolioFormatter;
         this.keyboardFactory = keyboardFactory;
+        this.balanceService = balanceService;
     }
 
     @Override
@@ -82,6 +86,7 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
         switch (command) {
             case start -> processStartCommand(message.getChatId(), message.getChat().getUserName());
             case portfolio -> portfolio(message.getChatId());
+            case analyze -> analyze();
         }
     }
 
@@ -93,6 +98,11 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
             InlineKeyboardMarkup keyboard = keyboardFactory.createPortfolioFilterKeyboard(account.getId());
             executeMethod(PrepareMessage.createMessage(chatId, messageText, keyboard));
         }
+    }
+    public void analyze(){
+            Portfolio portfolio = apiCore.getPortfolio(apiCore.getAccounts().get(0).getId());
+            List<InstrumentObj> instrumentObjs = apiCore.getInstruments(portfolio);
+            balanceService.findTotalDeviation(portfolio,instrumentObjs);
     }
 
     private void handleCallbackQuery(CallbackQuery query) {

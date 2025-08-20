@@ -1,6 +1,6 @@
 package org.invest.invest.api;
 
-import org.invest.invest.core.InstrumentObj;
+import org.invest.invest.core.objects.InstrumentObj;
 import ru.tinkoff.piapi.contract.v1.Account;
 import ru.tinkoff.piapi.contract.v1.Instrument;
 import ru.tinkoff.piapi.contract.v1.InstrumentStatus;

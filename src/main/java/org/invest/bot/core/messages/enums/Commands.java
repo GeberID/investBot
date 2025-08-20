@@ -1,8 +1,9 @@
-package org.invest.core.commands.enums;
+package org.invest.bot.core.messages.enums;
 
 public enum Commands {
     start("/start"),
-    portfolio("/portfolio");
+    portfolio("/portfolio"),
+    analyze("/analyze");
 
     private final String command;
     Commands(String command) {

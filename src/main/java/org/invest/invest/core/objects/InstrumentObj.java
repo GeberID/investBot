@@ -1,4 +1,4 @@
-package org.invest.invest.core;
+package org.invest.invest.core.objects;
 
 import ru.tinkoff.piapi.core.models.Money;
 
