@@ -26,6 +26,17 @@ public class InstrumentObj {
         this.figi = figi;
     }
 
+    public InstrumentObj(String name, String type, String ticker, String figi) {
+        this.name = name;
+        this.quantity = null;
+        this.currentPrice = null;
+        this.type = type;
+        this.ticker = ticker;
+        this.totalProfit = null;
+        this.averageBuyPrice = null;
+        this.figi = figi;
+    }
+
     // Геттеры для всех полей
     public String getName() {
         return name;
