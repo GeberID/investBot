@@ -15,7 +15,7 @@
         "bonds": {
           "total_percentage": 45.0,
           "core_percentage": 40.0,
-          "core_description": "Надежные эмитенты с рейтингом АА- и выше",
+          "core_description": "Надежные эмитенты с рейтингом A+ и выше",
           "satellites_percentage": 5.0,
           "satellites_description": "ВДО, для данного инвестора рекомендовано 0%"
         },
