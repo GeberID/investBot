@@ -4,10 +4,13 @@ import org.invest.bot.invest.core.objects.InstrumentObj;
 import ru.tinkoff.piapi.contract.v1.Account;
 import ru.tinkoff.piapi.contract.v1.Instrument;
 import ru.tinkoff.piapi.contract.v1.InstrumentStatus;
+import ru.tinkoff.piapi.contract.v1.Operation;
 import ru.tinkoff.piapi.core.InvestApi;
 import ru.tinkoff.piapi.core.models.Portfolio;
 import ru.tinkoff.piapi.core.models.Position;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -70,6 +73,41 @@ public class InvestApiCore {
         }
         instrumentObjs.sort(Comparator.comparing(InstrumentObj::getType).thenComparing(InstrumentObj::getName));
         return instrumentObjs;
+    }
+
+    public List<Operation> getOperationsForLastMonth(String accountId) {
+        Instant now = Instant.now();
+        Instant monthAgo = now.minus(30, ChronoUnit.DAYS);
+        return api.getOperationsService().getExecutedOperationsSync(accountId, monthAgo, now);
+    }
+
+    /**
+     * НОВЫЙ ПУБЛИЧНЫЙ МЕТОД
+     * Получает базовую информацию об инструменте по его FIGI.
+     * Этот метод НЕ заполняет данные, специфичные для портфеля (количество, цена покупки, профит).
+     * Он нужен как справочник для получения имени и тикера по FIGI.
+     *
+     * @param figi FIGI-идентификатор инструмента.
+     * @return Объект InstrumentObj с базовой информацией или null, если инструмент не найден.
+     */
+    public InstrumentObj getInstrumentByFigi(String figi) {
+        // Проверка на случай, если FIGI пустой (например, для операций пополнения счета)
+        if (figi == null || figi.isEmpty()) {
+            return null;
+        }
+        try {
+            var instrumentInfo = api.getInstrumentsService().getInstrumentByFigiSync(figi);
+            return new InstrumentObj(
+                    instrumentInfo.getName(),
+                    instrumentInfo.getInstrumentType(),
+                    instrumentInfo.getTicker(),
+                    instrumentInfo.getFigi()
+            );
+        } catch (Exception e) {
+
+            System.err.println("Не удалось получить информацию по FIGI: " + figi + ". Ошибка: " + e.getMessage());
+            return null;
+        }
     }
 
     private String getCurrencyNameByFigi(String figi) {

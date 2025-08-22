@@ -1,5 +1,6 @@
 package org.invest.bot.invest.core.modules.ai;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -8,21 +9,27 @@ import org.invest.bot.invest.core.modules.balanse.BalanceModuleConf;
 import org.invest.bot.invest.core.modules.balanse.BalanceService;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import ru.tinkoff.piapi.contract.v1.Account;
+import ru.tinkoff.piapi.contract.v1.MoneyValue;
+import ru.tinkoff.piapi.contract.v1.Operation;
 import ru.tinkoff.piapi.core.models.Portfolio;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public class AiReportService {
 
     private final InvestApiCore apiCore;
     private final BalanceService balanceService;
     private final ObjectMapper objectMapper; // Jackson's main object
+    private final Map<String, InstrumentObj> instrumentCache = new HashMap<>();
 
     public AiReportService(InvestApiCore apiCore, BalanceService balanceService) {
         this.apiCore = apiCore;
@@ -30,27 +37,96 @@ public class AiReportService {
         this.objectMapper = new ObjectMapper();
     }
 
+
     public File generateReportFile() throws IOException {
-        // Предполагаем, что работаем с первым счетом
+        // --- ШАГ 1: ЗАГРУЖАЕМ ШАБЛОН ---
+        // Загружаем ваш prompt_template.json в виде редактируемого JSON-дерева
+        ObjectNode rootNode = (ObjectNode) loadPromptTemplate();
+
+        // --- ШАГ 2: ПОЛУЧАЕМ ДАННЫЕ ПОРТФЕЛЯ (как и раньше) ---
         Account account = apiCore.getAccounts().get(0);
         Portfolio portfolio = apiCore.getPortfolio(account.getId());
         List<InstrumentObj> instruments = apiCore.getInstruments(portfolio);
+        List<Operation> operations = apiCore.getOperationsForLastMonth(account.getId());
 
-        // 1. Создаем корневой JSON-объект
-        ObjectNode rootNode = objectMapper.createObjectNode();
+        // --- ШАГ 3: СОЗДАЕМ УЗЕЛ С ДАННЫМИ ПОРТФЕЛЯ ---
+        ObjectNode portfolioDataNode = objectMapper.createObjectNode();
+        portfolioDataNode.put("export_date", Instant.now().toString());
+        addAccountInfo(portfolioDataNode, account);
+        addPortfolioSummary(portfolioDataNode, portfolio);
+        addStrategicAllocation(portfolioDataNode, portfolio, instruments);
+        addInstrumentsDetails(portfolioDataNode, instruments);
+        addTransactionLog(portfolioDataNode, operations, instruments);
 
-        // 2. Заполняем все секции
-        rootNode.put("export_date", Instant.now().toString());
-        addAccountInfo(rootNode, account);
-        addPortfolioSummary(rootNode, portfolio);
-        addStrategicAllocation(rootNode, portfolio, instruments);
-        addInstrumentsDetails(rootNode, instruments);
+        // --- ШАГ 4: ВСТАВЛЯЕМ ДАННЫЕ В ШАБЛОН ---
+        // Находим узел "portfolio_data" в шаблоне и заменяем его
+        // нашим полностью сформированным узлом с данными.
+        rootNode.set("portfolio_data", portfolioDataNode);
 
-        // 3. Создаем временный файл и записываем в него JSON
-        File tempFile = File.createTempFile("portfolio_report_", ".json");
+        // --- ШАГ 5: ЗАПИСЫВАЕМ ФИНАЛЬНЫЙ РЕЗУЛЬТАТ В ФАЙЛ ---
+        File tempFile = File.createTempFile("llm_portfolio_report_", ".json");
         objectMapper.writerWithDefaultPrettyPrinter().writeValue(tempFile, rootNode);
 
         return tempFile;
+    }
+
+    // --- Добавляет блок с логом транзакций ---
+    private void addTransactionLog(ObjectNode root, List<Operation> operations, List<InstrumentObj> currentInstruments) {
+        ArrayNode logNode = root.putArray("transaction_log");
+        for (Operation op : operations) {
+            ObjectNode opNode = logNode.addObject();
+            Optional<InstrumentObj> instrumentOpt = currentInstruments.stream()
+                    .filter(f -> f.getFigi().equals(op.getFigi()))
+                    .findFirst();
+            InstrumentObj instrumentDetails = null;
+            if (instrumentOpt.isPresent()) {
+                instrumentDetails = instrumentOpt.get();
+            } else {
+                instrumentDetails = apiCore.getInstrumentByFigi(op.getFigi());
+            }
+            opNode.put("date", op.getDate().toString());
+            opNode.put("type", op.getOperationType().name());
+            opNode.put("figi", op.getFigi());
+            if (instrumentDetails != null) {
+                opNode.put("ticker", instrumentDetails.getTicker());
+                opNode.put("name", instrumentDetails.getName());
+            } else {
+                opNode.put("ticker", "N/A");
+                opNode.put("name", "Информация недоступна");
+            }
+            opNode.put("quantity", op.getQuantity());
+            if (op.getPrice() != null && op.getQuantity() != 0) {
+                opNode.put("price_per_unit", quotationToBigDecimal(op.getPrice()));
+            }
+            opNode.put("payment", quotationToBigDecimal(op.getPayment()));
+            opNode.put("currency", op.getPayment().getCurrency());
+        }
+    }
+
+    private JsonNode loadPromptTemplate() throws IOException {
+        String resourcePath = "prompt_template.json";
+        try (InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream(resourcePath)) {
+            if (inputStream == null) {
+                throw new IOException("Ресурсный файл не найден: " + resourcePath);
+            }
+            return objectMapper.readTree(inputStream);
+        }
+    }
+
+    private BigDecimal quotationToBigDecimal(MoneyValue quotation) {
+        if (quotation == null) {
+            return BigDecimal.ZERO;
+        }
+        // Собираем BigDecimal из целой части (units) и дробной (nano)
+        return BigDecimal.valueOf(quotation.getUnits())
+                .add(BigDecimal.valueOf(quotation.getNano(), 9));
+    }
+
+    // --- НОВЫЕ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ для кэширования ---
+    private void fillInstrumentCache(List<InstrumentObj> instruments) {
+        for (InstrumentObj inst : instruments) {
+            instrumentCache.put(inst.getFigi(), inst);
+        }
     }
 
     private void addAccountInfo(ObjectNode root, Account account) {
