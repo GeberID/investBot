@@ -48,19 +48,18 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
     private final MessageFormatter messageFormatter;
     private final KeyboardFactory keyboardFactory;
     private final BalanceService balanceService;
-    private final InstrumentAnalysisService instrumentAnalysisService;
     private AnalysisResult lastSentDeviations;
     private final AiReportService aiReportService;
     private Long userChatId;
     private InvestApiCore apiCore;
+    private final InstrumentAnalysisService instrumentAnalysisService;
 
     public TelegramBot(@Value("${telegram.token}") String telegramToken,
                        MessageFormatter messageFormatter,
                        KeyboardFactory keyboardFactory,
                        BalanceService balanceService,
                        InvestApiCore apiCore,
-                       InstrumentAnalysisService instrumentAnalysisService
-                       ) {
+                       InstrumentAnalysisService instrumentAnalysisService) {
         this.telegramToken = telegramToken;
         this.apiCore = apiCore;
         this.telegramClient = new OkHttpTelegramClient(this.telegramToken);
@@ -107,7 +106,13 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
     }
 
     public void instrument(){
-        instrumentAnalysisService.getInstrument(apiCore.getAccounts().get(0).getId(),"SBER");
+        if (!checkChatId()) return;
+        Portfolio portfolio = apiCore.getPortfolio(apiCore.getAccounts().get(0).getId());
+        List<InstrumentObj> shares = apiCore.getInstruments(portfolio).stream()
+                .filter(f -> f.getType().equals("share")).toList();
+
+        InlineKeyboardMarkup keyboard = keyboardFactory.createTickerKeyboard(shares);
+        executeMethod(PrepareMessage.createMessage(userChatId, "Выберите акцию для анализа:", keyboard));
     }
 
     public void portfolio() {
@@ -115,7 +120,7 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
         for (Account account : apiCore.getAccounts()) {
             Portfolio portfolio = apiCore.getPortfolio(account.getId());
             List<InstrumentObj> instrumentObjs = apiCore.getInstruments(portfolio);
-            String messageText = messageFormatter.format(account.getName(), instrumentObjs, portfolio, "all");
+            String messageText = messageFormatter.portfolio(account.getName(), instrumentObjs, portfolio, "all");
             InlineKeyboardMarkup keyboard = keyboardFactory.createPortfolioFilterKeyboard(account.getId());
             executeMethod(PrepareMessage.createMessage(userChatId, messageText, keyboard));
         }
@@ -195,11 +200,18 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
 
     private void handleCallbackQuery(CallbackQuery query) {
         String data = query.getData();
-        if (data == null || !data.startsWith("filter:")) {
-            return;
+        if (data == null) return;
+        if (data.startsWith("filter:")) {
+            handlePortfolioFilter(query);
         }
+        if (data.startsWith("instr_")){
+            handleInstrumentSelection(query);
+        }
+    }
+
+    private void handlePortfolioFilter(CallbackQuery callbackQuery){
         try {
-            String[] parts = data.split(":");
+            String[] parts = callbackQuery.getData().split(":");
             if (parts.length < 3) return;
 
             String filterType = parts[1];
@@ -212,12 +224,12 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
             }
             Portfolio portfolio = apiCore.getPortfolio(accountId);
             List<InstrumentObj> instrumentObjs = apiCore.getInstruments(portfolio);
-            String newText = messageFormatter.format(account.getName(), instrumentObjs, portfolio, filterType);
+            String newText = messageFormatter.portfolio(account.getName(), instrumentObjs, portfolio, filterType);
             InlineKeyboardMarkup keyboard = keyboardFactory.createPortfolioFilterKeyboard(accountId);
 
             EditMessageText editMessage = EditMessageText.builder()
-                    .chatId(query.getMessage().getChatId())
-                    .messageId(query.getMessage().getMessageId())
+                    .chatId(callbackQuery.getMessage().getChatId())
+                    .messageId(callbackQuery.getMessage().getMessageId())
                     .text(newText)
                     .parseMode("HTML")
                     .replyMarkup(keyboard)
@@ -226,7 +238,32 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
             executeMethod(editMessage);
 
         } catch (Exception e) {
-            log.error("Error processing callback query: {}", data, e);
+            log.error("Error processing callback query: {}", callbackQuery.getData(), e);
+        }
+    }
+
+    private void handleInstrumentSelection(CallbackQuery query) {
+        try {
+            // Извлекаем тикер из callbackData: "instr_SBER" -> "SBER"
+            String ticker = query.getData().substring(6);
+
+            // 1. Получаем готовый отчет от нашего нового сервиса
+            String report = instrumentAnalysisService.analyzeInstrumentByTicker(ticker);
+
+            // 2. Редактируем исходное сообщение, заменяя кнопки на текст отчета
+            EditMessageText editMessage = EditMessageText.builder()
+                    .chatId(query.getMessage().getChatId())
+                    .messageId(query.getMessage().getMessageId())
+                    .text(report)
+                    .parseMode("HTML")
+                    // Клавиатуру убираем, так как выбор сделан
+                    .replyMarkup(null)
+                    .build();
+
+            executeMethod(editMessage);
+
+        } catch (Exception e) {
+            log.error("Error processing instrument selection callback: {}", query.getData(), e);
         }
     }
 

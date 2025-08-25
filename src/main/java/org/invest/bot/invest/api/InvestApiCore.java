@@ -1,10 +1,7 @@
 package org.invest.bot.invest.api;
 
 import org.invest.bot.invest.core.objects.InstrumentObj;
-import ru.tinkoff.piapi.contract.v1.Account;
-import ru.tinkoff.piapi.contract.v1.Instrument;
-import ru.tinkoff.piapi.contract.v1.InstrumentStatus;
-import ru.tinkoff.piapi.contract.v1.Operation;
+import ru.tinkoff.piapi.contract.v1.*;
 import ru.tinkoff.piapi.core.InvestApi;
 import ru.tinkoff.piapi.core.models.Portfolio;
 import ru.tinkoff.piapi.core.models.Position;
@@ -39,8 +36,26 @@ public class InvestApiCore {
                 .orElse(null);
     }
 
+    public List<HistoricCandle> getDailyCandles(int days, String instrumentId){
+        Instant now = Instant.now();
+        Instant start = now.minus(days,ChronoUnit.DAYS);
+        return api.getMarketDataService().getCandlesSync(instrumentId,now,start,CandleInterval.CANDLE_INTERVAL_DAY);
+    }
+
+    public List<HistoricCandle> getWeeklyCandles(int weeks, String instrumentId){
+        Instant now = Instant.now();
+        Instant start = now.minus(weeks,ChronoUnit.WEEKS);
+        return api.getMarketDataService().getCandlesSync(instrumentId,now,start,CandleInterval.CANDLE_INTERVAL_WEEK);
+    }
+
+    public List<Dividend> getDividends(String instrumentFigi){
+        Instant now = Instant.now();
+        Instant yearAhead = now.plus(365, ChronoUnit.DAYS);
+        return api.getInstrumentsService().getDividendsSync(instrumentFigi, now, yearAhead);
+    }
+
     public Instrument getInstrumentInfo (InstrumentObj instrumentObj) throws ExecutionException, InterruptedException {
-        Instrument instrument = api.getInstrumentsService().getInstrumentByFigi(instrumentObj.getFigi()).get();
+        Instrument instrument = api.getInstrumentsService().getInstrumentByFigiSync(instrumentObj.getFigi());
         return instrument;
     }
 
@@ -57,6 +72,19 @@ public class InvestApiCore {
         }
         instrumentObjs.sort(Comparator.comparing(InstrumentObj::getType).thenComparing(InstrumentObj::getName));
         return instrumentObjs;
+    }
+
+    public InstrumentObj getInstrument(Portfolio portfolio, String instrumentTicket){
+        return getInstruments(portfolio).stream().filter(f -> f.getTicker().equals(instrumentTicket)).findFirst().orElse(null);
+    }
+
+    public Position getPortfolioPosition(String accountId,String figi){
+        Portfolio portfolio = getPortfolio(accountId);
+        List<Position> positions = portfolio.getPositions();
+        return positions.stream()
+                .filter(p -> p.getFigi().equalsIgnoreCase(figi)) // Ищем по тикеру, игнорируя регистр
+                .findFirst()
+                .orElse(null);
     }
 
     public List<Operation> getOperationsForLastMonth(String accountId) {

@@ -1,32 +1,33 @@
 package org.invest.bot.invest.core.modules.instruments;
 
+import org.invest.bot.core.messages.MessageFormatter;
 import org.invest.bot.invest.api.InvestApiCore;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Service;
-import ru.tinkoff.piapi.contract.v1.Instrument;
 import ru.tinkoff.piapi.core.models.Portfolio;
-
-import java.util.concurrent.ExecutionException;
+import ru.tinkoff.piapi.core.models.Position;
 
 
 @Service
 public class InstrumentAnalysisService {
     private final InvestApiCore apiCore;
+    private final MessageFormatter messageFormatter;
 
-    public InstrumentAnalysisService(InvestApiCore apiCore) {
+    public InstrumentAnalysisService(InvestApiCore apiCore, MessageFormatter messageFormatter) {
         this.apiCore = apiCore;
+        this.messageFormatter = messageFormatter;
     }
 
-    public void getInstrument(String  accountId,String instrumentTicket){
+
+    public String analyzeInstrumentByTicker(String ticker) {
+        String accountId = apiCore.getAccounts().get(0).getId();
         Portfolio portfolio = apiCore.getPortfolio(accountId);
-        InstrumentObj instrumentObj = apiCore.getInstruments(portfolio)
-                .stream().filter(f -> f.getTicker().equals(instrumentTicket)).findFirst().orElse(null);
-        try {
-            Instrument instrumentInfo = apiCore.getInstrumentInfo(instrumentObj);
-        } catch (ExecutionException e) {
-            throw new RuntimeException(e);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+        InstrumentObj instrumentObj = apiCore.getInstrument(portfolio, ticker);
+        Position portfolioPosition = null;
+        if (instrumentObj != null) {
+            portfolioPosition = apiCore.getPortfolioPosition(accountId, instrumentObj.getFigi());
         }
+        return messageFormatter.reportInstrument(ticker,portfolio, instrumentObj, portfolioPosition);
     }
+
 }
