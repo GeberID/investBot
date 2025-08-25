@@ -28,7 +28,7 @@ public class AiReportService {
 
     private final InvestApiCore apiCore;
     private final BalanceService balanceService;
-    private final ObjectMapper objectMapper; // Jackson's main object
+    private final ObjectMapper objectMapper;
     private final Map<String, InstrumentObj> instrumentCache = new HashMap<>();
 
     public AiReportService(InvestApiCore apiCore, BalanceService balanceService) {
@@ -39,17 +39,11 @@ public class AiReportService {
 
 
     public File generateReportFile() throws IOException {
-        // --- ШАГ 1: ЗАГРУЖАЕМ ШАБЛОН ---
-        // Загружаем ваш prompt_template.json в виде редактируемого JSON-дерева
         ObjectNode rootNode = (ObjectNode) loadPromptTemplate();
-
-        // --- ШАГ 2: ПОЛУЧАЕМ ДАННЫЕ ПОРТФЕЛЯ (как и раньше) ---
         Account account = apiCore.getAccounts().get(0);
         Portfolio portfolio = apiCore.getPortfolio(account.getId());
         List<InstrumentObj> instruments = apiCore.getInstruments(portfolio);
         List<Operation> operations = apiCore.getOperationsForLastMonth(account.getId());
-
-        // --- ШАГ 3: СОЗДАЕМ УЗЕЛ С ДАННЫМИ ПОРТФЕЛЯ ---
         ObjectNode portfolioDataNode = objectMapper.createObjectNode();
         portfolioDataNode.put("export_date", Instant.now().toString());
         addAccountInfo(portfolioDataNode, account);
@@ -57,20 +51,12 @@ public class AiReportService {
         addStrategicAllocation(portfolioDataNode, portfolio, instruments);
         addInstrumentsDetails(portfolioDataNode, instruments);
         addTransactionLog(portfolioDataNode, operations, instruments);
-
-        // --- ШАГ 4: ВСТАВЛЯЕМ ДАННЫЕ В ШАБЛОН ---
-        // Находим узел "portfolio_data" в шаблоне и заменяем его
-        // нашим полностью сформированным узлом с данными.
         rootNode.set("portfolio_data", portfolioDataNode);
-
-        // --- ШАГ 5: ЗАПИСЫВАЕМ ФИНАЛЬНЫЙ РЕЗУЛЬТАТ В ФАЙЛ ---
         File tempFile = File.createTempFile("llm_portfolio_report_", ".json");
         objectMapper.writerWithDefaultPrettyPrinter().writeValue(tempFile, rootNode);
-
         return tempFile;
     }
 
-    // --- Добавляет блок с логом транзакций ---
     private void addTransactionLog(ObjectNode root, List<Operation> operations, List<InstrumentObj> currentInstruments) {
         ArrayNode logNode = root.putArray("transaction_log");
         for (Operation op : operations) {
@@ -117,12 +103,10 @@ public class AiReportService {
         if (quotation == null) {
             return BigDecimal.ZERO;
         }
-        // Собираем BigDecimal из целой части (units) и дробной (nano)
         return BigDecimal.valueOf(quotation.getUnits())
-                .add(BigDecimal.valueOf(quotation.getNano(), 9));
+                .add(BigDecimal.valueOf(quotation.getNano(), 2));
     }
 
-    // --- НОВЫЕ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ для кэширования ---
     private void fillInstrumentCache(List<InstrumentObj> instruments) {
         for (InstrumentObj inst : instruments) {
             instrumentCache.put(inst.getFigi(), inst);
@@ -144,16 +128,13 @@ public class AiReportService {
     }
 
     private void addStrategicAllocation(ObjectNode root, Portfolio portfolio, List<InstrumentObj> instruments) {
-        // --- ИСПРАВЛЕНИЕ: Вызываем новый, правильный метод ---
         Map<BalanceModuleConf, BigDecimal> distribution = balanceService.calculateActualDistribution(portfolio, instruments);
-
         ObjectNode allocation = root.putObject("strategic_allocation_actual");
         for (Map.Entry<BalanceModuleConf, BigDecimal> entry : distribution.entrySet()) {
-            // Преобразуем имя enum в более удобный для JSON формат
             String key = entry.getKey().name()
                     .toLowerCase()
                     .replace("target_", "")
-                    .replace("__", "_"); // Для "SATELLITE__PERCENTAGE"
+                    .replace("__", "_");
             allocation.put(key, entry.getValue());
         }
     }
@@ -166,15 +147,13 @@ public class AiReportService {
             instNode.put("ticker", inst.getTicker());
             instNode.put("figi", inst.getFigi());
             instNode.put("type", inst.getType());
-            instNode.put("quantity", inst.getQuantity()); // <-- ДОБАВЛЕНО
+            instNode.put("quantity", inst.getQuantity());
             instNode.put("currency", inst.getCurrentPrice().getCurrency());
             instNode.put("current_price_per_unit", inst.getCurrentPrice().getValue());
             instNode.put("total_current_value", inst.getCurrentPrice().getValue().multiply(inst.getQuantity()));
-
             if (inst.getAverageBuyPrice() != null && inst.getTotalProfit() != null) {
                 instNode.put("average_buy_price", inst.getAverageBuyPrice().getValue());
                 instNode.put("total_profit_absolute", inst.getTotalProfit());
-
                 BigDecimal totalInvested = inst.getAverageBuyPrice().getValue().multiply(inst.getQuantity());
                 if (totalInvested.signum() != 0) {
                     BigDecimal profitPercentage = inst.getTotalProfit()

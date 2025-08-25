@@ -4,7 +4,8 @@ public enum Commands {
     start("/start"),
     portfolio("/portfolio"),
     analyze("/analyze"),
-    exp("/exp");
+    exp("/exp"),
+    instrument("/instrument");
 
     private final String command;
     Commands(String command) {

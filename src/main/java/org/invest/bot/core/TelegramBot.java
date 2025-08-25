@@ -44,22 +44,22 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
 
     private final String telegramToken;
     private final TelegramClient telegramClient;
-    private final InvestApiCore apiCore;
     private final MessageFormatter messageFormatter;
     private final KeyboardFactory keyboardFactory;
     private final BalanceService balanceService;
     private AnalysisResult lastSentDeviations;
     private final AiReportService aiReportService;
     private Long userChatId;
+    private InvestApiCore apiCore;
 
     public TelegramBot(@Value("${telegram.token}") String telegramToken,
-                       @Value("${tinkoff.readonly}") String tinkoffReadonly,
                        MessageFormatter messageFormatter,
                        KeyboardFactory keyboardFactory,
-                       BalanceService balanceService
+                       BalanceService balanceService,
+                       InvestApiCore apiCore
                        ) {
         this.telegramToken = telegramToken;
-        this.apiCore = new InvestApiCore(tinkoffReadonly);
+        this.apiCore = apiCore;
         this.telegramClient = new OkHttpTelegramClient(this.telegramToken);
         this.messageFormatter = messageFormatter;
         this.keyboardFactory = keyboardFactory;
@@ -148,6 +148,12 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
         }
     }
 
+    public void getInstrument(){
+        Account account = apiCore.getAccounts().get(0);
+        Portfolio portfolio = apiCore.getPortfolio(account.getId());
+        List<InstrumentObj> instrumentObjs = apiCore.getInstruments(portfolio);
+    }
+
     @Scheduled(cron = "0 0 13 * * MON-FRI")
     public void scheduledAnalysis() {
         if (!checkChatId()) {
@@ -164,17 +170,13 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
             List<InstrumentObj> instrumentObjs = apiCore.getInstruments(portfolio);
 
             AnalysisResult currentResult = balanceService.findTotalDeviation(portfolio, instrumentObjs);
-
-            // Проверяем изменения, только если это плановый запуск
             if (checkChanges && currentResult.equals(lastSentDeviations)) {
                 log.info("Отклонения для chatId {} не изменились. Отправка пропущена.", userChatId);
                 return;
             }
-
             String messageText = messageFormatter.formatBalanceDeviations(currentResult);
             executeMethod(PrepareMessage.createMessage(userChatId, messageText));
             this.lastSentDeviations = currentResult;
-
         } catch (Exception e) {
             log.error("Ошибка во время анализа для chatId {}: {}", userChatId, e.getMessage());
         }
