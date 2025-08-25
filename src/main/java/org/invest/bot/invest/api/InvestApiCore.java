@@ -2,6 +2,7 @@ package org.invest.bot.invest.api;
 
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import ru.tinkoff.piapi.contract.v1.Account;
+import ru.tinkoff.piapi.contract.v1.Instrument;
 import ru.tinkoff.piapi.contract.v1.InstrumentStatus;
 import ru.tinkoff.piapi.contract.v1.Operation;
 import ru.tinkoff.piapi.core.InvestApi;
@@ -12,6 +13,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 
 public class InvestApiCore {
     private final InvestApi api;
@@ -35,6 +37,11 @@ public class InvestApiCore {
                 .filter(acc -> acc.getId().equals(accountId))
                 .findFirst()
                 .orElse(null);
+    }
+
+    public Instrument getInstrumentInfo (InstrumentObj instrumentObj) throws ExecutionException, InterruptedException {
+        Instrument instrument = api.getInstrumentsService().getInstrumentByFigi(instrumentObj.getFigi()).get();
+        return instrument;
     }
 
     public List<InstrumentObj> getInstruments(Portfolio portfolio) {
