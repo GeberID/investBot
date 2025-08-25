@@ -10,6 +10,7 @@ import org.invest.bot.invest.api.InvestApiCore;
 import org.invest.bot.invest.core.modules.ai.AiReportService;
 import org.invest.bot.invest.core.modules.balanse.AnalysisResult;
 import org.invest.bot.invest.core.modules.balanse.BalanceService;
+import org.invest.bot.invest.core.modules.instruments.InstrumentAnalysisService;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,6 +48,7 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
     private final MessageFormatter messageFormatter;
     private final KeyboardFactory keyboardFactory;
     private final BalanceService balanceService;
+    private final InstrumentAnalysisService instrumentAnalysisService;
     private AnalysisResult lastSentDeviations;
     private final AiReportService aiReportService;
     private Long userChatId;
@@ -56,7 +58,8 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
                        MessageFormatter messageFormatter,
                        KeyboardFactory keyboardFactory,
                        BalanceService balanceService,
-                       InvestApiCore apiCore
+                       InvestApiCore apiCore,
+                       InstrumentAnalysisService instrumentAnalysisService
                        ) {
         this.telegramToken = telegramToken;
         this.apiCore = apiCore;
@@ -65,6 +68,7 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
         this.keyboardFactory = keyboardFactory;
         this.balanceService = balanceService;
         this.aiReportService = new AiReportService(this.apiCore, this.balanceService);
+        this.instrumentAnalysisService = instrumentAnalysisService;
     }
     @Override
     public String getBotToken() {
@@ -98,7 +102,12 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
             case portfolio -> portfolio();
             case analyze -> analyzeCommand();
             case exp ->exportForAi();
+            case instrument -> instrument();
         }
+    }
+
+    public void instrument(){
+        instrumentAnalysisService.getInstrument(apiCore.getAccounts().get(0).getId(),"SBER");
     }
 
     public void portfolio() {
@@ -146,12 +155,6 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
             // Отправляем сообщение об ошибке пользователю
             executeMethod(PrepareMessage.createMessage(userChatId, "Произошла ошибка при создании отчета."));
         }
-    }
-
-    public void getInstrument(){
-        Account account = apiCore.getAccounts().get(0);
-        Portfolio portfolio = apiCore.getPortfolio(account.getId());
-        List<InstrumentObj> instrumentObjs = apiCore.getInstruments(portfolio);
     }
 
     @Scheduled(cron = "0 0 13 * * MON-FRI")

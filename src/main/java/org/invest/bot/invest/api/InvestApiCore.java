@@ -2,7 +2,6 @@ package org.invest.bot.invest.api;
 
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import ru.tinkoff.piapi.contract.v1.Account;
-import ru.tinkoff.piapi.contract.v1.Instrument;
 import ru.tinkoff.piapi.contract.v1.InstrumentStatus;
 import ru.tinkoff.piapi.contract.v1.Operation;
 import ru.tinkoff.piapi.core.InvestApi;
@@ -41,34 +40,12 @@ public class InvestApiCore {
     public List<InstrumentObj> getInstruments(Portfolio portfolio) {
         List<InstrumentObj> instrumentObjs = new ArrayList<>();
         for (Position position : portfolio.getPositions()) {
-            if (isFiatCurrency(position.getFigi())) {
-                instrumentObjs.add(new InstrumentObj(
-                        getCurrencyNameByFigi(position.getFigi()),
-                        position.getQuantity(),
-                        position.getCurrentPrice(),
-                        "currency",
-                        position.getFigi().substring(0, 3),
-                        position.getExpectedYield(),
-                        position.getAveragePositionPrice(),
-                        position.getFigi()));
-            } else {
-                try {
-                    Instrument instrumentObjInfo = api.getInstrumentsService().getInstrumentByFigiSync(position.getFigi());
-                    instrumentObjs.add(
-                            new InstrumentObj(
-                                    instrumentObjInfo.getName(),
-                                    position.getQuantity(),
-                                    position.getCurrentPrice(),
-                                    instrumentObjInfo.getInstrumentType(),
-                                    instrumentObjInfo.getTicker(),
-                                    position.getExpectedYield(),
-                                    position.getAveragePositionPrice(),
-                                    position.getFigi()
-                            ));
-                } catch (Exception e) {
-                    System.err.println("Could not retrieve instrument details for FIGI: " + position.getFigi() +
-                            ". Error: " + e.getMessage());
-                }
+            try {
+                instrumentObjs.add(new InstrumentObj(position,
+                        api.getInstrumentsService().getInstrumentByFigiSync(position.getFigi())));
+            } catch (Exception e) {
+                System.err.println("Could not retrieve instrument details for FIGI: " + position.getFigi() +
+                        ". Error: " + e.getMessage());
             }
         }
         instrumentObjs.sort(Comparator.comparing(InstrumentObj::getType).thenComparing(InstrumentObj::getName));
@@ -96,13 +73,8 @@ public class InvestApiCore {
             return null;
         }
         try {
-            var instrumentInfo = api.getInstrumentsService().getInstrumentByFigiSync(figi);
             return new InstrumentObj(
-                    instrumentInfo.getName(),
-                    instrumentInfo.getInstrumentType(),
-                    instrumentInfo.getTicker(),
-                    instrumentInfo.getFigi()
-            );
+                    null,api.getInstrumentsService().getInstrumentByFigiSync(figi));
         } catch (Exception e) {
 
             System.err.println("Не удалось получить информацию по FIGI: " + figi + ". Ошибка: " + e.getMessage());
