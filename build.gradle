@@ -28,6 +28,7 @@ dependencies {
     implementation 'ru.tinkoff.piapi:java-sdk-core:1.31'
     implementation 'ru.tinkoff.piapi:java-sdk-storage-csv:1.31'
     implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
 }
 
 tasks.named('test') {

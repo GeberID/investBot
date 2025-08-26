@@ -29,5 +29,4 @@ public class InstrumentAnalysisService {
         }
         return messageFormatter.reportInstrument(ticker,portfolio, instrumentObj, portfolioPosition);
     }
-
 }

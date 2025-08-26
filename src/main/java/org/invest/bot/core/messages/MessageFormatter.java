@@ -1,12 +1,9 @@
 package org.invest.bot.core.messages;
 
-import org.invest.bot.invest.api.InvestApiCore;
 import org.invest.bot.invest.core.modules.balanse.AnalysisResult;
 import org.invest.bot.invest.core.modules.balanse.BalanceModuleConf;
-import org.invest.bot.invest.core.modules.instruments.InstrumentAnalysisService;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Component;
-import ru.tinkoff.piapi.contract.v1.Instrument;
 import ru.tinkoff.piapi.core.models.Money;
 import ru.tinkoff.piapi.core.models.Portfolio;
 import ru.tinkoff.piapi.core.models.Position;
@@ -24,7 +21,6 @@ import static org.invest.bot.core.DataConvertUtility.getPercentCount;
 public class MessageFormatter {
 
     public String reportInstrument(String ticker,Portfolio portfolio, InstrumentObj targetPosition, Position portfolioPosition) {
-        // --- Шаг 1: Обработка случая, если инструмент не найден ---
         if (targetPosition == null || portfolioPosition == null) {
             return String.format("Инструмент с тикером '%s' не найден в вашем портфеле.", ticker);
         }
@@ -35,7 +31,6 @@ public class MessageFormatter {
         BigDecimal percentage = getPercentCount(portfolio.getTotalAmountPortfolio(),
                 targetPosition.getQuantity().multiply(targetPosition.getCurrentPrice().getValue()));
 
-        // --- Шаг 2: Блок "Позиция в портфеле" (как у вас) ---
         report.append("<b>Позиция в портфеле:</b>\n");
         report.append(String.format(" • Количество: %s шт.\n", portfolioPosition.getQuantity().setScale(0, RoundingMode.DOWN)));
         report.append(String.format(" • Средняя цена: %s\n", formatMoney(portfolioPosition.getAveragePositionPrice())));
@@ -43,33 +38,24 @@ public class MessageFormatter {
         report.append(String.format(" • Вся цена: %s\n", portfolioPosition.getCurrentPrice().getValue()
                 .multiply(portfolioPosition.getQuantity()).setScale(2,RoundingMode.HALF_UP)));
 
-        // --- Шаг 3: БЛОК "ФИНАНСОВЫЙ РЕЗУЛЬТАТ" (НОВАЯ ЛОГИКА) ---
         report.append("\n<b>Финансовый результат:</b>\n");
 
         BigDecimal profitValue = targetPosition.getTotalProfit();
         Money averageBuyPrice = targetPosition.getAverageBuyPrice();
 
-        // Проверяем, что у нас есть все данные для расчета
         if (profitValue != null && averageBuyPrice != null) {
-            // Рассчитываем общую сумму инвестиций
             BigDecimal totalInvested = averageBuyPrice.getValue().multiply(targetPosition.getQuantity());
 
             BigDecimal profitPercentage = BigDecimal.ZERO;
-            // Защита от деления на ноль
             if (totalInvested.signum() != 0) {
                 profitPercentage = profitValue.multiply(BigDecimal.valueOf(100))
                         .divide(totalInvested, 2, RoundingMode.HALF_UP);
             }
-
-            // Получаем символ валюты из средней цены покупки (она всегда в той же валюте, что и профит)
             String profitCurrencySymbol = getCurrencySymbol(averageBuyPrice.getCurrency());
-
             String profitStr = formatProfit(profitValue, profitCurrencySymbol);
             String percentageStr = formatPercentage(profitPercentage);
-
             report.append(String.format(" • Прибыль/убыток: %s (%s)\n", profitStr, percentageStr));
         } else {
-            // Если данных для расчета нет, сообщаем об этом
             report.append(" • Данные о прибыли недоступны.\n");
         }
 
@@ -119,7 +105,6 @@ public class MessageFormatter {
     }
 
     /**
-     * НОВЫЙ ПУБЛИЧНЫЙ МЕТОД
      * Форматирует отчет о стратегических отклонениях.
      *
      * @param result Карта с отклонениями от BalanceService.
@@ -253,7 +238,7 @@ public class MessageFormatter {
 
     private void addAssetAllocationLine(StringBuilder sb, String name, Money amount, Money total) {
         if (amount != null && amount.getValue().signum() != 0) {
-            sb.append(String.format("%-15s %s - %s%%\n", name + ":", amount.getValue()
+            sb.append(String.format("%-15s %s | %s%%\n", name + ":", amount.getValue()
                     .setScale(2, RoundingMode.HALF_UP), getPercentCount(total, amount)));
         }
     }

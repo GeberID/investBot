@@ -66,7 +66,7 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
         this.messageFormatter = messageFormatter;
         this.keyboardFactory = keyboardFactory;
         this.balanceService = balanceService;
-        this.aiReportService = new AiReportService(this.apiCore, this.balanceService);
+        this.aiReportService = new AiReportService(this.balanceService);
         this.instrumentAnalysisService = instrumentAnalysisService;
     }
     @Override
@@ -110,7 +110,6 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
         Portfolio portfolio = apiCore.getPortfolio(apiCore.getAccounts().get(0).getId());
         List<InstrumentObj> shares = apiCore.getInstruments(portfolio).stream()
                 .filter(f -> f.getType().equals("share")).toList();
-
         InlineKeyboardMarkup keyboard = keyboardFactory.createTickerKeyboard(shares);
         executeMethod(PrepareMessage.createMessage(userChatId, "Выберите акцию для анализа:", keyboard));
     }
@@ -244,22 +243,15 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
 
     private void handleInstrumentSelection(CallbackQuery query) {
         try {
-            // Извлекаем тикер из callbackData: "instr_SBER" -> "SBER"
             String ticker = query.getData().substring(6);
-
-            // 1. Получаем готовый отчет от нашего нового сервиса
             String report = instrumentAnalysisService.analyzeInstrumentByTicker(ticker);
-
-            // 2. Редактируем исходное сообщение, заменяя кнопки на текст отчета
             EditMessageText editMessage = EditMessageText.builder()
                     .chatId(query.getMessage().getChatId())
                     .messageId(query.getMessage().getMessageId())
                     .text(report)
                     .parseMode("HTML")
-                    // Клавиатуру убираем, так как выбор сделан
                     .replyMarkup(null)
                     .build();
-
             executeMethod(editMessage);
 
         } catch (Exception e) {

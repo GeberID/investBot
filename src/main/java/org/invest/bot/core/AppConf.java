@@ -1,5 +1,6 @@
-package org.invest.bot.invest.api;
+package org.invest.bot.core;
 
+import org.invest.bot.invest.api.InvestApiCore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
