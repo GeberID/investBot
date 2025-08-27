@@ -53,7 +53,6 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
     private Long userChatId;
     private InvestApiCore apiCore;
     private final InstrumentAnalysisService instrumentAnalysisService;
-
     public TelegramBot(@Value("${telegram.token}") String telegramToken,
                        MessageFormatter messageFormatter,
                        KeyboardFactory keyboardFactory,
@@ -137,27 +136,19 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
             File reportFile = aiReportService.generateReportFile();
 
             InputFile inputFile = new InputFile(reportFile);
-
-            // Затем создаем SendDocument, передавая обязательные параметры
             SendDocument sendDocument = new SendDocument(String.valueOf(userChatId), inputFile);
-
-            // Настраиваем опциональные параметры через сеттеры
             sendDocument.setCaption("Отчет по портфелю для анализа нейросетью.");
-
             try {
                 telegramClient.execute(sendDocument);
             } catch (TelegramApiException e) {
                 log.error("Telegram API execution error: {}", e.getMessage(), e);
             }
-
-            // Важно: после отправки временный файл нужно удалить
             if (reportFile.delete()) {
                 log.info("Временный файл отчета удален: {}", reportFile.getName());
             }
 
         } catch (Exception e) {
             log.error("Не удалось создать или отправить AI-отчет для chatId {}: {}", userChatId, e.getMessage());
-            // Отправляем сообщение об ошибке пользователю
             executeMethod(PrepareMessage.createMessage(userChatId, "Произошла ошибка при создании отчета."));
         }
     }
@@ -226,7 +217,6 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
             List<InstrumentObj> instrumentObjs = apiCore.getInstruments(portfolio);
             String newText = messageFormatter.portfolio(account.getName(), instrumentObjs, portfolio, filterType);
             InlineKeyboardMarkup keyboard = keyboardFactory.createPortfolioFilterKeyboard(accountId);
-
             EditMessageText editMessage = EditMessageText.builder()
                     .chatId(callbackQuery.getMessage().getChatId())
                     .messageId(callbackQuery.getMessage().getMessageId())

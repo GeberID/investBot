@@ -96,7 +96,6 @@ public class InvestApiCore {
     }
 
     /**
-     * НОВЫЙ ПУБЛИЧНЫЙ МЕТОД
      * Получает базовую информацию об инструменте по его FIGI.
      * Этот метод НЕ заполняет данные, специфичные для портфеля (количество, цена покупки, профит).
      * Он нужен как справочник для получения имени и тикера по FIGI.
@@ -105,7 +104,6 @@ public class InvestApiCore {
      * @return Объект InstrumentObj с базовой информацией или null, если инструмент не найден.
      */
     public InstrumentObj getInstrumentByFigi(String figi) {
-        // Проверка на случай, если FIGI пустой (например, для операций пополнения счета)
         if (figi == null || figi.isEmpty()) {
             return null;
         }
