@@ -69,8 +69,6 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
         this.balanceService = balanceService;
         this.aiReportService = aiReportService;
         this.instrumentAnalysisService = instrumentAnalysisService;
-        log.info("<<<<< TelegramBot получил экземпляр InvestApiCore: {} >>>>>", apiCore);
-        log.info("<<<<< Класс полученного экземпляра: {} >>>>>", apiCore.getClass().getName());
     }
     @Override
     public String getBotToken() {

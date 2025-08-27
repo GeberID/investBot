@@ -14,11 +14,7 @@ public class AppConf {
     private static final Logger log = LoggerFactory.getLogger(AppConf.class);
     @Bean
     public InvestApiCore investApiCore(){
-        log.info("<<<<< AppConfig РАБОТАЕТ! Создаю бин InvestApiCore... >>>>>");
-
         InvestApiCore apiCoreInstance = new InvestApiCore(tinkoffToken);
-        // --- ДОБАВЬТЕ ЭТУ СТРОКУ ---
-        log.info("<<<<< Создан экземпляр InvestApiCore: {} >>>>>", apiCoreInstance);
         return apiCoreInstance;
     }
 }

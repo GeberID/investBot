@@ -16,7 +16,7 @@ import java.util.Arrays;
 public class LoggingAspect {
     private static final Logger log = LoggerFactory.getLogger(LoggingAspect.class);
 
-    @Pointcut("execution(* org.invest.invest.api.InvestApiCore.*(..))")
+    @Pointcut("execution(* org.invest.bot.invest.api.InvestApiCore.*(..))")
     public void investApiCoreMethods() {}
 
     @Before("investApiCoreMethods()")
