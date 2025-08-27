@@ -1,6 +1,7 @@
 package org.invest.bot.invest.api;
 
 import org.invest.bot.invest.core.objects.InstrumentObj;
+import org.springframework.stereotype.Component;
 import ru.tinkoff.piapi.contract.v1.*;
 import ru.tinkoff.piapi.core.InvestApi;
 import ru.tinkoff.piapi.core.models.Portfolio;
@@ -8,13 +9,15 @@ import ru.tinkoff.piapi.core.models.Position;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
+@Component
 public class InvestApiCore {
     private final InvestApi api;
-    private final Map<String, CachedInstrument> instrumentCache = new ConcurrentHashMap<>();
 
     public InvestApiCore(String token) {
         this.api = InvestApi.createReadonly(token);

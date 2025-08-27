@@ -8,6 +8,7 @@ import org.invest.bot.invest.api.InvestApiCore;
 import org.invest.bot.invest.core.modules.balanse.BalanceModuleConf;
 import org.invest.bot.invest.core.modules.balanse.BalanceService;
 import org.invest.bot.invest.core.objects.InstrumentObj;
+import org.springframework.stereotype.Service;
 import ru.tinkoff.piapi.contract.v1.Account;
 import ru.tinkoff.piapi.contract.v1.MoneyValue;
 import ru.tinkoff.piapi.contract.v1.Operation;
@@ -24,9 +25,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+@Service
 public class AiReportService {
 
-    private final InvestApiCore apiCore;
+    private InvestApiCore apiCore;
     private final BalanceService balanceService;
     private final ObjectMapper objectMapper;
     private final Map<String, InstrumentObj> instrumentCache = new HashMap<>();
