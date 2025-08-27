@@ -10,7 +10,7 @@ import ru.tinkoff.piapi.core.models.Position;
 
 @Service
 public class InstrumentAnalysisService {
-    private final InvestApiCore apiCore;
+    private InvestApiCore apiCore;
     private final MessageFormatter messageFormatter;
 
     public InstrumentAnalysisService(InvestApiCore apiCore, MessageFormatter messageFormatter) {

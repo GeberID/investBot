@@ -1,6 +1,7 @@
 package org.invest.bot.invest.api;
 
 import org.invest.bot.invest.core.objects.InstrumentObj;
+import org.springframework.stereotype.Component;
 import ru.tinkoff.piapi.contract.v1.*;
 import ru.tinkoff.piapi.core.InvestApi;
 import ru.tinkoff.piapi.core.models.Portfolio;
@@ -8,17 +9,18 @@ import ru.tinkoff.piapi.core.models.Position;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
+@Component
 public class InvestApiCore {
     private final InvestApi api;
-    private final Map<String, CachedInstrument> instrumentCache = new ConcurrentHashMap<>();
 
     public InvestApiCore(String token) {
         this.api = InvestApi.createReadonly(token);
-        warmUpCache();
     }
 
     public List<Account> getAccounts() {
@@ -144,24 +146,5 @@ public class InvestApiCore {
 
     private boolean isFiatCurrency(String figi) {
         return FIAT_CURRENCY_FIGIS.contains(figi);
-    }
-
-    private void warmUpCache() {
-        try {
-            api.getInstrumentsService().getSharesSync(InstrumentStatus.INSTRUMENT_STATUS_BASE).forEach(share ->
-                    instrumentCache.put(share.getFigi(), new CachedInstrument(share.getName(), share.getTicker())));
-
-            api.getInstrumentsService().getBondsSync(InstrumentStatus.INSTRUMENT_STATUS_BASE).forEach(bond ->
-                    instrumentCache.put(bond.getFigi(), new CachedInstrument(bond.getName(), bond.getTicker())));
-
-            api.getInstrumentsService().getEtfsSync(InstrumentStatus.INSTRUMENT_STATUS_BASE).forEach(etf ->
-                    instrumentCache.put(etf.getFigi(), new CachedInstrument(etf.getName(), etf.getTicker())));
-
-            api.getInstrumentsService().getCurrenciesSync(InstrumentStatus.INSTRUMENT_STATUS_BASE).forEach(currency ->
-                    instrumentCache.put(currency.getFigi(), new CachedInstrument(currency.getName(), currency.getTicker())));
-        } catch (Exception e) {
-            System.err.println("FATAL: Failed to warm up instrument cache. Error: " + e.getMessage());
-        }
-        System.out.println("Cache warmed up. Total items: " + instrumentCache.size());
     }
 }

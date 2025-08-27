@@ -59,15 +59,18 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
                        KeyboardFactory keyboardFactory,
                        BalanceService balanceService,
                        InvestApiCore apiCore,
-                       InstrumentAnalysisService instrumentAnalysisService) {
+                       InstrumentAnalysisService instrumentAnalysisService,
+                       AiReportService aiReportService) {
         this.telegramToken = telegramToken;
         this.apiCore = apiCore;
         this.telegramClient = new OkHttpTelegramClient(this.telegramToken);
         this.messageFormatter = messageFormatter;
         this.keyboardFactory = keyboardFactory;
         this.balanceService = balanceService;
-        this.aiReportService = new AiReportService(this.apiCore, this.balanceService);
+        this.aiReportService = aiReportService;
         this.instrumentAnalysisService = instrumentAnalysisService;
+        log.info("<<<<< TelegramBot получил экземпляр InvestApiCore: {} >>>>>", apiCore);
+        log.info("<<<<< Класс полученного экземпляра: {} >>>>>", apiCore.getClass().getName());
     }
     @Override
     public String getBotToken() {
