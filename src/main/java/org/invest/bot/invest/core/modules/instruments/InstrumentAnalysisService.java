@@ -18,7 +18,6 @@ public class InstrumentAnalysisService {
         this.messageFormatter = messageFormatter;
     }
 
-
     public String analyzeInstrumentByTicker(String ticker) {
         String accountId = apiCore.getAccounts().get(0).getId();
         Portfolio portfolio = apiCore.getPortfolio(accountId);

@@ -39,13 +39,8 @@ public class AiReportService {
         this.objectMapper = new ObjectMapper();
     }
 
-
-    public File generateReportFile() throws IOException {
+    public File generateReportFile(Account account, Portfolio portfolio,List<InstrumentObj> instruments,List<Operation> operations) throws IOException {
         ObjectNode rootNode = (ObjectNode) loadPromptTemplate();
-        Account account = apiCore.getAccounts().get(0);
-        Portfolio portfolio = apiCore.getPortfolio(account.getId());
-        List<InstrumentObj> instruments = apiCore.getInstruments(portfolio);
-        List<Operation> operations = apiCore.getOperationsForLastMonth(account.getId());
         ObjectNode portfolioDataNode = objectMapper.createObjectNode();
         portfolioDataNode.put("export_date", Instant.now().toString());
         addAccountInfo(portfolioDataNode, account);
@@ -107,12 +102,6 @@ public class AiReportService {
         }
         return BigDecimal.valueOf(quotation.getUnits())
                 .add(BigDecimal.valueOf(quotation.getNano(), 2));
-    }
-
-    private void fillInstrumentCache(List<InstrumentObj> instruments) {
-        for (InstrumentObj inst : instruments) {
-            instrumentCache.put(inst.getFigi(), inst);
-        }
     }
 
     private void addAccountInfo(ObjectNode root, Account account) {

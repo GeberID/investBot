@@ -33,6 +33,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 import ru.tinkoff.piapi.contract.v1.Account;
+import ru.tinkoff.piapi.contract.v1.Operation;
 import ru.tinkoff.piapi.core.models.Portfolio;
 
 import java.io.File;
@@ -133,7 +134,11 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
     public void exportForAi() {
         try {
             log.info("Запрос на экспорт данных для AI от chatId {}", userChatId);
-            File reportFile = aiReportService.generateReportFile();
+            Account account = apiCore.getAccounts().get(0);
+            Portfolio portfolio = apiCore.getPortfolio(account.getId());
+            List<InstrumentObj> instrumentObjs = apiCore.getInstruments(portfolio);
+            List<Operation> operations = apiCore.getOperationsForLastMonth(account.getId());
+            File reportFile = aiReportService.generateReportFile(account, portfolio,instrumentObjs,operations);
 
             InputFile inputFile = new InputFile(reportFile);
             SendDocument sendDocument = new SendDocument(String.valueOf(userChatId), inputFile);

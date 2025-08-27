@@ -39,7 +39,6 @@ public class InstrumentObj {
         this.figi = position.getFigi();
     }
 
-    // Геттеры для всех полей
     public String getName() {
         return name;
     }

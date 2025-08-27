@@ -288,7 +288,6 @@ public class MessageFormatter {
         return String.format("%s%s%s%%", emoji, sign, percentage.abs());
     }
 
-    // Вспомогательный метод для красивого вывода денег
     private String formatMoney(ru.tinkoff.piapi.core.models.Money money) {
         if (money == null) return "N/A";
         return money.getValue().setScale(2, RoundingMode.HALF_UP) + " " + money.getCurrency().toUpperCase();

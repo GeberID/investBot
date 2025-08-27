@@ -56,10 +56,6 @@ public class InvestApiCore {
         return api.getInstrumentsService().getDividendsSync(instrumentFigi, now, yearAhead);
     }
 
-    public Instrument getInstrumentInfo (InstrumentObj instrumentObj) throws ExecutionException, InterruptedException {
-        Instrument instrument = api.getInstrumentsService().getInstrumentByFigiSync(instrumentObj.getFigi());
-        return instrument;
-    }
 
     public List<InstrumentObj> getInstruments(Portfolio portfolio) {
         List<InstrumentObj> instrumentObjs = new ArrayList<>();
