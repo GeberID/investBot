@@ -6,6 +6,7 @@ import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Component;
 import ru.tinkoff.piapi.core.models.Money;
 import ru.tinkoff.piapi.core.models.Portfolio;
+import ru.tinkoff.piapi.core.models.Position;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -18,16 +19,65 @@ import static org.invest.bot.core.DataConvertUtility.getPercentCount;
 
 @Component
 public class MessageFormatter {
+
+    public String reportInstrument(String ticker,Portfolio portfolio, InstrumentObj targetPosition, Position portfolioPosition) {
+        if (targetPosition == null || portfolioPosition == null) {
+            return String.format("Инструмент с тикером '%s' не найден в вашем портфеле.", ticker);
+        }
+
+        StringBuilder report = new StringBuilder();
+        report.append(String.format("<b>Сводка по %s (%s)</b>\n\n", targetPosition.getName(), targetPosition.getTicker()));
+
+        BigDecimal percentage = getPercentCount(portfolio.getTotalAmountPortfolio(),
+                targetPosition.getQuantity().multiply(targetPosition.getCurrentPrice().getValue()));
+
+        report.append("<b>Позиция в портфеле:</b>\n");
+        report.append(String.format(" • Количество: %s шт.\n", portfolioPosition.getQuantity().setScale(0, RoundingMode.DOWN)));
+        report.append(String.format(" • Средняя цена: %s\n", formatMoney(portfolioPosition.getAveragePositionPrice())));
+        report.append(String.format(" • Текущая цена: %s\n", formatMoney(portfolioPosition.getCurrentPrice())));
+        report.append(String.format(" • Вся цена: %s\n", portfolioPosition.getCurrentPrice().getValue()
+                .multiply(portfolioPosition.getQuantity()).setScale(2,RoundingMode.HALF_UP)));
+
+        report.append("\n<b>Финансовый результат:</b>\n");
+
+        BigDecimal profitValue = targetPosition.getTotalProfit();
+        Money averageBuyPrice = targetPosition.getAverageBuyPrice();
+
+        if (profitValue != null && averageBuyPrice != null) {
+            BigDecimal totalInvested = averageBuyPrice.getValue().multiply(targetPosition.getQuantity());
+
+            BigDecimal profitPercentage = BigDecimal.ZERO;
+            if (totalInvested.signum() != 0) {
+                profitPercentage = profitValue.multiply(BigDecimal.valueOf(100))
+                        .divide(totalInvested, 2, RoundingMode.HALF_UP);
+            }
+            String profitCurrencySymbol = getCurrencySymbol(averageBuyPrice.getCurrency());
+            String profitStr = formatProfit(profitValue, profitCurrencySymbol);
+            String percentageStr = formatPercentage(profitPercentage);
+            report.append(String.format(" • Прибыль/убыток: %s (%s)\n", profitStr, percentageStr));
+        } else {
+            report.append(" • Данные о прибыли недоступны.\n");
+        }
+
+        // --- Шаг 4: Блок "Роль в стратегии" (пока заглушка) ---
+        report.append("\n<b>Роль в стратегии:</b>\n");
+        report.append(" • Доля в портфеле: ");
+        report.append(percentage).append("\n");
+        report.append(" • Тип: Спутник\n");
+
+        return report.toString();
+    }
+
     /**
      * Главный метод, который генерирует полное сообщение о портфеле.
      *
-     * @param accountName Имя счета
+     * @param accountName    Имя счета
      * @param instrumentObjs Список всех инструментов на счете
-     * @param filterType  Тип для фильтрации ("share", "bond", "all")
+     * @param filterType     Тип для фильтрации ("share", "bond", "all")
      * @return Готовый к отправке текст сообщения
      */
-    public String format(String accountName, List<InstrumentObj> instrumentObjs,
-                         Portfolio portfolio, String filterType) {
+    public String portfolio(String accountName, List<InstrumentObj> instrumentObjs,
+                            Portfolio portfolio, String filterType) {
         StringBuilder sb = new StringBuilder();
         sb.append("<b>\uD83D\uDDC3️ ").append(accountName).append("</b>\n\n");
         if (instrumentObjs.isEmpty()) {
@@ -55,8 +105,8 @@ public class MessageFormatter {
     }
 
     /**
-     * НОВЫЙ ПУБЛИЧНЫЙ МЕТОД
      * Форматирует отчет о стратегических отклонениях.
+     *
      * @param result Карта с отклонениями от BalanceService.
      * @return Готовый к отправке текст сообщения.
      */
@@ -67,7 +117,7 @@ public class MessageFormatter {
         }
         StringBuilder sb = new StringBuilder();
         sb.append("️️️️️️️️️️️️️️️<b>Cтратегический анализ портфеля</b>\n\nОбнаружены следующие отклонения:\n");
-        for (Map.Entry<BalanceModuleConf, BigDecimal> entry : result.classDeviations.entrySet()){
+        for (Map.Entry<BalanceModuleConf, BigDecimal> entry : result.classDeviations.entrySet()) {
             BalanceModuleConf target = entry.getKey();
             BigDecimal fact = entry.getValue();
             sb.append("\n• ").append(formatDeviationLine(target, fact));
@@ -115,12 +165,18 @@ public class MessageFormatter {
      */
     private String getFriendlyNameForTarget(BalanceModuleConf target) {
         switch (target) {
-            case TARGET_STOCK_CORE_PERCENTAGE: return "Акции (Ядро)";
-            case TARGET_STOCK_SATELLITE__PERCENTAGE: return "Акции (Спутники)";
-            case TARGET_BOND_PERCENTAGE: return "Облигации";
-            case TARGET_PROTECTION_PERCENTAGE: return "Защита";
-            case TARGET_RESERVE_PERCENTAGE: return "Резерв";
-            default: return "Неизвестная категория";
+            case TARGET_STOCK_CORE_PERCENTAGE:
+                return "Акции (Ядро)";
+            case TARGET_STOCK_SATELLITE__PERCENTAGE:
+                return "Акции (Спутники)";
+            case TARGET_BOND_PERCENTAGE:
+                return "Облигации";
+            case TARGET_PROTECTION_PERCENTAGE:
+                return "Защита";
+            case TARGET_RESERVE_PERCENTAGE:
+                return "Резерв";
+            default:
+                return "Неизвестная категория";
         }
     }
 
@@ -182,8 +238,8 @@ public class MessageFormatter {
 
     private void addAssetAllocationLine(StringBuilder sb, String name, Money amount, Money total) {
         if (amount != null && amount.getValue().signum() != 0) {
-            sb.append(String.format("%-15s %s - %s%%\n", name + ":", amount.getValue()
-                    .setScale(2, RoundingMode.HALF_UP), getPercentCount(total,amount)));
+            sb.append(String.format("%-15s %s | %s%%\n", name + ":", amount.getValue()
+                    .setScale(2, RoundingMode.HALF_UP), getPercentCount(total, amount)));
         }
     }
 
@@ -230,5 +286,11 @@ public class MessageFormatter {
             emoji = "\uD83D\uDCC9"; // 📉
         }
         return String.format("%s%s%s%%", emoji, sign, percentage.abs());
+    }
+
+    // Вспомогательный метод для красивого вывода денег
+    private String formatMoney(ru.tinkoff.piapi.core.models.Money money) {
+        if (money == null) return "N/A";
+        return money.getValue().setScale(2, RoundingMode.HALF_UP) + " " + money.getCurrency().toUpperCase();
     }
 }

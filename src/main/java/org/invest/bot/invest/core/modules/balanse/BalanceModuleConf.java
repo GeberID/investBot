@@ -25,7 +25,7 @@ public enum BalanceModuleConf {
     public static Set<String> getProtectionTickets() {
         return Set.of(
                 "GLDRUB_TOM", // FIGI для TGLD (золото)
-                "USD"  // FIGI для USD
+                "USD000UTSTOM"  // FIGI для USD
         );
     }
 
@@ -33,7 +33,7 @@ public enum BalanceModuleConf {
     public static Set<String> getReserveTickets() {
         return Set.of(
                 "TMON@", // FIGI для TMON (фонд ден. рынка)
-                "RUB"  // FIGI для RUB
+                "RUB000UTSTOM"  // FIGI для RUB
         );
     }
 }

@@ -1,6 +1,8 @@
 package org.invest.bot.invest.core.objects;
 
+import ru.tinkoff.piapi.contract.v1.Instrument;
 import ru.tinkoff.piapi.core.models.Money;
+import ru.tinkoff.piapi.core.models.Position;
 
 import java.math.BigDecimal;
 
@@ -26,15 +28,15 @@ public class InstrumentObj {
         this.figi = figi;
     }
 
-    public InstrumentObj(String name, String type, String ticker, String figi) {
-        this.name = name;
-        this.quantity = null;
-        this.currentPrice = null;
-        this.type = type;
-        this.ticker = ticker;
-        this.totalProfit = null;
-        this.averageBuyPrice = null;
-        this.figi = figi;
+    public InstrumentObj(Position position, Instrument instrument){
+        this.name = instrument.getName();
+        this.quantity = position.getQuantity();
+        this.currentPrice = position.getCurrentPrice();
+        this.type = instrument.getInstrumentType();
+        this.ticker = instrument.getTicker();
+        this.totalProfit = position.getExpectedYield();
+        this.averageBuyPrice = position.getAveragePositionPrice();
+        this.figi = position.getFigi();
     }
 
     // Геттеры для всех полей
