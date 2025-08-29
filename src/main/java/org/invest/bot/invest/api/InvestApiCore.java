@@ -104,8 +104,11 @@ public class InvestApiCore {
             return null;
         }
         try {
+            Instrument instrumentByFigiSync = api.getInstrumentsService().getInstrumentByFigiSync(figi);
             return new InstrumentObj(
-                    null,api.getInstrumentsService().getInstrumentByFigiSync(figi));
+                    instrumentByFigiSync.getName(),null,null,
+                    instrumentByFigiSync.getInstrumentType(),instrumentByFigiSync.getTicker(),
+                    null,null,instrumentByFigiSync.getFigi());
         } catch (Exception e) {
 
             System.err.println("Не удалось получить информацию по FIGI: " + figi + ". Ошибка: " + e.getMessage());
