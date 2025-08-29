@@ -20,10 +20,7 @@ import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 public class AiReportService {
@@ -67,8 +64,9 @@ public class AiReportService {
             } else {
                 instrumentDetails = apiCore.getInstrumentByFigi(op.getFigi());
             }
-            opNode.put("date", op.getDate().toString());
-            opNode.put("type", op.getOperationType().name());
+            opNode.put("date", Date.from(Instant.ofEpochSecond(op.getDate().getSeconds())).toString());
+            opNode.put("type", op.getType());
+            opNode.put("instruments type", op.getInstrumentType());
             opNode.put("figi", op.getFigi());
             if (instrumentDetails != null) {
                 opNode.put("ticker", instrumentDetails.getTicker());
@@ -77,9 +75,10 @@ public class AiReportService {
                 opNode.put("ticker", "N/A");
                 opNode.put("name", "Информация недоступна");
             }
-            opNode.put("quantity", op.getQuantity());
-            if (op.getPrice() != null && op.getQuantity() != 0) {
-                opNode.put("price_per_unit", quotationToBigDecimal(op.getPrice()));
+            if(!op.getOperationType().equals("OPERATION_TYPE_COUPON")){
+                opNode.put("quantity", op.getQuantity());
+            }else {
+                opNode.put("quantity", "Информация недоступна");
             }
             opNode.put("payment", quotationToBigDecimal(op.getPayment()));
             opNode.put("currency", op.getPayment().getCurrency());
@@ -97,11 +96,8 @@ public class AiReportService {
     }
 
     private BigDecimal quotationToBigDecimal(MoneyValue quotation) {
-        if (quotation == null) {
-            return BigDecimal.ZERO;
-        }
         return BigDecimal.valueOf(quotation.getUnits())
-                .add(BigDecimal.valueOf(quotation.getNano(), 2));
+                .add(BigDecimal.valueOf(quotation.getNano(), 9));
     }
 
     private void addAccountInfo(ObjectNode root, Account account) {
