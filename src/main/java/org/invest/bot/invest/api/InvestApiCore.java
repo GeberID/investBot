@@ -12,8 +12,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+
+import static ru.tinkoff.piapi.contract.v1.GetTechAnalysisRequest.TypeOfPrice.TYPE_OF_PRICE_CLOSE;
 
 @Component
 public class InvestApiCore {
@@ -38,16 +40,10 @@ public class InvestApiCore {
                 .orElse(null);
     }
 
-    public List<HistoricCandle> getDailyCandles(int days, String instrumentId){
+    public List<HistoricCandle> getHistoricCandles(String figi, int days, CandleInterval interval) {
         Instant now = Instant.now();
-        Instant start = now.minus(days,ChronoUnit.DAYS);
-        return api.getMarketDataService().getCandlesSync(instrumentId,now,start,CandleInterval.CANDLE_INTERVAL_DAY);
-    }
-
-    public List<HistoricCandle> getWeeklyCandles(int weeks, String instrumentId){
-        Instant now = Instant.now();
-        Instant start = now.minus(weeks,ChronoUnit.WEEKS);
-        return api.getMarketDataService().getCandlesSync(instrumentId,now,start,CandleInterval.CANDLE_INTERVAL_WEEK);
+        Instant startDate = now.minus(days, ChronoUnit.DAYS);
+        return api.getMarketDataService().getCandlesSync(figi, startDate, now, interval);
     }
 
     public List<Dividend> getDividends(String instrumentFigi){
@@ -56,6 +52,31 @@ public class InvestApiCore {
         return api.getInstrumentsService().getDividendsSync(instrumentFigi, now, yearAhead);
     }
 
+    public GetTechAnalysisResponse getTechAnalysis(
+            String figi,
+            GetTechAnalysisRequest.IndicatorType type,
+            GetTechAnalysisRequest.IndicatorInterval interval,
+            int historyDays,
+            int length) {
+        Instant to = Instant.now();
+        Instant from = to.minus(historyDays,ChronoUnit.DAYS);
+        InstrumentObj instrument = getInstrumentByFigi(figi);
+        try {
+            return api.getMarketDataService().getTechAnalysis(type,
+                    instrument.getInstrumentUid(),
+                    from,
+                    to,
+                    interval,
+                    TYPE_OF_PRICE_CLOSE,
+                    length,
+                    null,
+                    null,
+                    null,
+                    null).get();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     public List<InstrumentObj> getInstruments(Portfolio portfolio) {
         List<InstrumentObj> instrumentObjs = new ArrayList<>();
@@ -106,7 +127,7 @@ public class InvestApiCore {
         try {
             Instrument instrumentByFigiSync = api.getInstrumentsService().getInstrumentByFigiSync(figi);
             return new InstrumentObj(
-                    instrumentByFigiSync.getName(),null,null,
+                    instrumentByFigiSync.getName(),instrumentByFigiSync.getUid(),null,null,
                     instrumentByFigiSync.getInstrumentType(),instrumentByFigiSync.getTicker(),
                     null,null,instrumentByFigiSync.getFigi());
         } catch (Exception e) {

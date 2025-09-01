@@ -22,6 +22,8 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.*;
 
+import static org.invest.bot.core.DataConvertUtility.quotationToBigDecimal;
+
 @Service
 public class AiReportService {
 
@@ -95,10 +97,6 @@ public class AiReportService {
         }
     }
 
-    private BigDecimal quotationToBigDecimal(MoneyValue quotation) {
-        return BigDecimal.valueOf(quotation.getUnits())
-                .add(BigDecimal.valueOf(quotation.getNano(), 9));
-    }
 
     private void addAccountInfo(ObjectNode root, Account account) {
         ObjectNode info = root.putObject("account_info");

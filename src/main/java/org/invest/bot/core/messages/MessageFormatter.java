@@ -4,6 +4,7 @@ import org.invest.bot.invest.core.modules.balanse.AnalysisResult;
 import org.invest.bot.invest.core.modules.balanse.BalanceModuleConf;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Component;
+import ru.tinkoff.piapi.contract.v1.Dividend;
 import ru.tinkoff.piapi.core.models.Money;
 import ru.tinkoff.piapi.core.models.Portfolio;
 import ru.tinkoff.piapi.core.models.Position;
@@ -20,7 +21,12 @@ import static org.invest.bot.core.DataConvertUtility.getPercentCount;
 @Component
 public class MessageFormatter {
 
-    public String reportInstrument(String ticker,Portfolio portfolio, InstrumentObj targetPosition, Position portfolioPosition) {
+    public String reportInstrument(String ticker,Portfolio portfolio,
+                                   InstrumentObj targetPosition,
+                                   Position portfolioPosition,
+                                   BigDecimal sma200,
+                                   BigDecimal weeklyRsi,
+                                   List<Dividend> dividends) {
         if (targetPosition == null || portfolioPosition == null) {
             return String.format("Инструмент с тикером '%s' не найден в вашем портфеле.", ticker);
         }
@@ -58,6 +64,13 @@ public class MessageFormatter {
         } else {
             report.append(" • Данные о прибыли недоступны.\n");
         }
+        report.append("\n<b>Анализ:</b>\n");
+        report.append(" • SMA: ");
+        report.append(sma200).append("\n");
+        report.append(" • WeeklyRsi: ");
+        report.append(weeklyRsi).append("\n");
+        report.append(" • Дивиденты: ");
+        report.append(dividends).append("\n");
 
         // --- Шаг 4: Блок "Роль в стратегии" (пока заглушка) ---
         report.append("\n<b>Роль в стратегии:</b>\n");

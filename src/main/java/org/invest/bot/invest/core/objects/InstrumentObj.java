@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 
 public class InstrumentObj {
     private final String name;
+    private final String instrumentUid;
     private final BigDecimal quantity;
     private final Money currentPrice;
     private final String type;
@@ -16,9 +17,10 @@ public class InstrumentObj {
     private final Money averageBuyPrice;
     private final String figi;
 
-    public InstrumentObj(String name, BigDecimal quantity, Money currentPrice, String type, String ticker,
+    public InstrumentObj(String name, String instrumentUid, BigDecimal quantity, Money currentPrice, String type, String ticker,
                          BigDecimal totalProfit, Money averageBuyPrice, String figi) {
         this.name = name;
+        this.instrumentUid = instrumentUid;
         this.quantity = quantity;
         this.currentPrice = currentPrice;
         this.type = type;
@@ -28,8 +30,9 @@ public class InstrumentObj {
         this.figi = figi;
     }
 
-    public InstrumentObj(Position position, Instrument instrument){
+    public InstrumentObj(Position position, Instrument instrument) {
         this.name = instrument.getName();
+        this.instrumentUid = instrument.getUid();
         this.quantity = position.getQuantity();
         this.currentPrice = position.getCurrentPrice();
         this.type = instrument.getInstrumentType();
@@ -69,5 +72,9 @@ public class InstrumentObj {
 
     public String getFigi() {
         return figi;
+    }
+
+    public String getInstrumentUid() {
+        return instrumentUid;
     }
 }

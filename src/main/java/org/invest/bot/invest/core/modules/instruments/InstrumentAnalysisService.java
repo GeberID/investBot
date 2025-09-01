@@ -1,11 +1,21 @@
 package org.invest.bot.invest.core.modules.instruments;
 
+import org.invest.bot.core.DataConvertUtility;
 import org.invest.bot.core.messages.MessageFormatter;
 import org.invest.bot.invest.api.InvestApiCore;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Service;
+import ru.tinkoff.piapi.contract.v1.Dividend;
+import ru.tinkoff.piapi.contract.v1.GetTechAnalysisRequest;
+import ru.tinkoff.piapi.contract.v1.GetTechAnalysisResponse;
+import ru.tinkoff.piapi.contract.v1.Quotation;
 import ru.tinkoff.piapi.core.models.Portfolio;
 import ru.tinkoff.piapi.core.models.Position;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+import static org.invest.bot.core.DataConvertUtility.quotationToBigDecimal;
 
 
 @Service
@@ -19,13 +29,30 @@ public class InstrumentAnalysisService {
     }
 
     public String analyzeInstrumentByTicker(String ticker) {
+        BigDecimal sma200 = null;
+        BigDecimal weeklyRsi = null;
+        List<Dividend> dividends = null;
         String accountId = apiCore.getAccounts().get(0).getId();
         Portfolio portfolio = apiCore.getPortfolio(accountId);
         InstrumentObj instrumentObj = apiCore.getInstrument(portfolio, ticker);
         Position portfolioPosition = null;
         if (instrumentObj != null) {
             portfolioPosition = apiCore.getPortfolioPosition(accountId, instrumentObj.getFigi());
+            sma200 = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj.getFigi(),
+                    GetTechAnalysisRequest.IndicatorType.INDICATOR_TYPE_SMA,
+                    GetTechAnalysisRequest.IndicatorInterval.INDICATOR_INTERVAL_ONE_DAY,
+                    0,
+                    200).getTechnicalIndicatorsList().get(0).getMiddleBand());
+            weeklyRsi = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj.getFigi(),
+                    GetTechAnalysisRequest.IndicatorType.INDICATOR_TYPE_RSI,
+                    GetTechAnalysisRequest.IndicatorInterval.INDICATOR_INTERVAL_WEEK,
+                    0,
+                    14).getTechnicalIndicatorsList().get(0).getMiddleBand());
+            // 3. Получаем дивиденды
+            dividends = apiCore.getDividends(instrumentObj.getFigi());
         }
-        return messageFormatter.reportInstrument(ticker,portfolio, instrumentObj, portfolioPosition);
+        return messageFormatter.reportInstrument(ticker,portfolio, instrumentObj, portfolioPosition,sma200, weeklyRsi, dividends);
     }
+
+
 }
