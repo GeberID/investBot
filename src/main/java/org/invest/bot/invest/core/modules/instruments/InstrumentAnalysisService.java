@@ -1,14 +1,11 @@
 package org.invest.bot.invest.core.modules.instruments;
 
-import org.invest.bot.core.DataConvertUtility;
 import org.invest.bot.core.messages.MessageFormatter;
 import org.invest.bot.invest.api.InvestApiCore;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Service;
 import ru.tinkoff.piapi.contract.v1.Dividend;
 import ru.tinkoff.piapi.contract.v1.GetTechAnalysisRequest;
-import ru.tinkoff.piapi.contract.v1.GetTechAnalysisResponse;
-import ru.tinkoff.piapi.contract.v1.Quotation;
 import ru.tinkoff.piapi.core.models.Portfolio;
 import ru.tinkoff.piapi.core.models.Position;
 
