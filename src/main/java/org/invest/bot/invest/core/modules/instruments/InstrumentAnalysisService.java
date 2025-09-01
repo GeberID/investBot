@@ -39,12 +39,12 @@ public class InstrumentAnalysisService {
                     GetTechAnalysisRequest.IndicatorType.INDICATOR_TYPE_SMA,
                     GetTechAnalysisRequest.IndicatorInterval.INDICATOR_INTERVAL_ONE_DAY,
                     0,
-                    200).getTechnicalIndicatorsList().get(0).getMiddleBand());
+                    200).getTechnicalIndicators(0).getSignal());
             weeklyRsi = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj.getFigi(),
                     GetTechAnalysisRequest.IndicatorType.INDICATOR_TYPE_RSI,
                     GetTechAnalysisRequest.IndicatorInterval.INDICATOR_INTERVAL_WEEK,
                     0,
-                    14).getTechnicalIndicatorsList().get(0).getMiddleBand());
+                    14).getTechnicalIndicators(0).getSignal());
             // 3. Получаем дивиденды
             dividends = apiCore.getDividends(instrumentObj.getFigi());
         }
