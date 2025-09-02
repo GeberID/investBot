@@ -6,9 +6,6 @@ import org.invest.bot.invest.core.modules.balanse.BalanceModuleConf;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Component;
 import ru.tinkoff.piapi.contract.v1.Dividend;
-import ru.tinkoff.piapi.contract.v1.GetTechAnalysisRequest;
-import ru.tinkoff.piapi.contract.v1.GetTechAnalysisResponse;
-import ru.tinkoff.piapi.contract.v1.Quotation;
 import ru.tinkoff.piapi.core.models.Money;
 import ru.tinkoff.piapi.core.models.Portfolio;
 import ru.tinkoff.piapi.core.models.Position;
@@ -20,16 +17,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.invest.bot.core.DataConvertUtility.*;
-import static org.invest.bot.core.DataConvertUtility.quotationToBigDecimal;
+import static org.invest.bot.core.DataConvertUtility.convertTimeStampToStringWithoutYearSymbol;
+import static org.invest.bot.core.DataConvertUtility.getPercentCount;
 
 @Component
 public class MessageFormatter {
-    private InvestApiCore apiCore;
-
-    public MessageFormatter (InvestApiCore apiCore){
-        this.apiCore = apiCore;
-    }
 
     public String reportInstrument(String ticker, Portfolio portfolio,
                                    InstrumentObj targetPosition,
@@ -166,7 +158,6 @@ public class MessageFormatter {
         }
     }
 
-    // --- НОВЫЕ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ДЛЯ ФОРМАТИРОВАНИЯ ---
 
     private String formatTrend(BigDecimal currentPrice, BigDecimal smaValue) {
         if (currentPrice == null || smaValue == null || smaValue.signum() == 0) {
@@ -207,11 +198,11 @@ public class MessageFormatter {
         }
         String rsiStatus;
         if (rsiValue.compareTo(new BigDecimal("70")) > 0) {
-            rsiStatus = "🥵 Перекупленность";
+            rsiStatus = "Перекупленность";
         } else if (rsiValue.compareTo(new BigDecimal("35")) < 0) {
-            rsiStatus = "🥶 Перепроданность";
+            rsiStatus = "Перепроданность";
         } else {
-            rsiStatus = "⚖️ Нейтральный";
+            rsiStatus = "Нейтральный";
         }
         return rsiStatus;
     }
@@ -231,7 +222,6 @@ public class MessageFormatter {
     }
 
     /**
-     * НОВЫЙ ПРИВАТНЫЙ МЕТОД
      * Форматирует одну строку для отчета об отклонениях.
      */
     private String formatDeviationLine(BalanceModuleConf target, BigDecimal fact) {

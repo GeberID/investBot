@@ -1,5 +1,6 @@
 package org.invest.bot.invest.api;
 
+import org.invest.bot.invest.core.modules.instruments.IndicatorType;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Component;
 import ru.tinkoff.piapi.contract.v1.*;
@@ -58,25 +59,22 @@ public class InvestApiCore {
 
     public GetTechAnalysisResponse getTechAnalysis(
             String figi,
-            GetTechAnalysisRequest.IndicatorType type,
-            GetTechAnalysisRequest.IndicatorInterval interval,
-            int historyDays,
-            int length) {
+            IndicatorType indicatorType) {
         Instant to = Instant.now();
-        Instant from = to.minus(historyDays,ChronoUnit.DAYS);
+        Instant from = to.minus(indicatorType.getHistoryDays(),ChronoUnit.DAYS);
         InstrumentObj instrument = getInstrumentByFigi(figi);
         try {
-            return api.getMarketDataService().getTechAnalysis(type,
+            return api.getMarketDataService().getTechAnalysis(indicatorType.getApiType(),
                     instrument.getInstrumentUid(),
                     from,
                     to,
-                    interval,
+                    indicatorType.getInterval(),
                     TYPE_OF_PRICE_CLOSE,
-                    length,
-                    null,
-                    null,
-                    null,
-                    null).get();
+                    indicatorType.getLength(),
+                    indicatorType.getDeviation(),
+                    indicatorType.getSmoothingFastLength(),
+                    indicatorType.getSmoothingSlowLength(),
+                    indicatorType.getSmoothingSignal()).get();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

@@ -13,6 +13,8 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.invest.bot.core.DataConvertUtility.quotationToBigDecimal;
+import static org.invest.bot.invest.core.modules.instruments.IndicatorType.RSI_14_WEEK;
+import static org.invest.bot.invest.core.modules.instruments.IndicatorType.SMA_200_DAY;
 
 
 @Service
@@ -36,15 +38,9 @@ public class InstrumentAnalysisService {
         if (instrumentObj != null) {
             portfolioPosition = apiCore.getPortfolioPosition(accountId, instrumentObj.getFigi());
             sma200 = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj.getFigi(),
-                    GetTechAnalysisRequest.IndicatorType.INDICATOR_TYPE_SMA,
-                    GetTechAnalysisRequest.IndicatorInterval.INDICATOR_INTERVAL_ONE_DAY,
-                    0,
-                    200).getTechnicalIndicators(0).getSignal());
+                    SMA_200_DAY).getTechnicalIndicators(0).getSignal());
             weeklyRsi = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj.getFigi(),
-                    GetTechAnalysisRequest.IndicatorType.INDICATOR_TYPE_RSI,
-                    GetTechAnalysisRequest.IndicatorInterval.INDICATOR_INTERVAL_WEEK,
-                    0,
-                    14).getTechnicalIndicators(0).getSignal());
+                    RSI_14_WEEK).getTechnicalIndicators(0).getSignal());
             // 3. Получаем дивиденды
             dividends = apiCore.getDividends(instrumentObj.getFigi());
         }
