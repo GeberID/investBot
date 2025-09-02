@@ -7,12 +7,8 @@ import ru.tinkoff.piapi.core.models.Money;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-
-import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.Date;
 
 public final class DataConvertUtility {
@@ -33,6 +29,9 @@ public final class DataConvertUtility {
     }
 
     public static BigDecimal quotationToBigDecimal(Quotation quotation) {
+        if(quotation == null){
+            return BigDecimal.ZERO;
+        }
         return BigDecimal.valueOf(quotation.getUnits())
                 .add(BigDecimal.valueOf(quotation.getNano(), 9));
     }

@@ -50,7 +50,7 @@ public class InvestApiCore {
         Instant now = Instant.now();
         Instant yearAhead = now.plus(365, ChronoUnit.DAYS);
         List<Dividend> dividends = api.getInstrumentsService().getDividendsSync(instrumentFigi, now, yearAhead);
-        if(dividends.equals(null)){
+        if(dividends == null){
             return new ArrayList<>();
         }
         return dividends;

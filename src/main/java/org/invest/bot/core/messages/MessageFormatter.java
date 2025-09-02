@@ -1,10 +1,14 @@
 package org.invest.bot.core.messages;
 
+import org.invest.bot.invest.api.InvestApiCore;
 import org.invest.bot.invest.core.modules.balanse.AnalysisResult;
 import org.invest.bot.invest.core.modules.balanse.BalanceModuleConf;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Component;
 import ru.tinkoff.piapi.contract.v1.Dividend;
+import ru.tinkoff.piapi.contract.v1.GetTechAnalysisRequest;
+import ru.tinkoff.piapi.contract.v1.GetTechAnalysisResponse;
+import ru.tinkoff.piapi.contract.v1.Quotation;
 import ru.tinkoff.piapi.core.models.Money;
 import ru.tinkoff.piapi.core.models.Portfolio;
 import ru.tinkoff.piapi.core.models.Position;
@@ -16,11 +20,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.invest.bot.core.DataConvertUtility.convertTimeStampToStringWithoutYearSymbol;
-import static org.invest.bot.core.DataConvertUtility.getPercentCount;
+import static org.invest.bot.core.DataConvertUtility.*;
+import static org.invest.bot.core.DataConvertUtility.quotationToBigDecimal;
 
 @Component
 public class MessageFormatter {
+    private InvestApiCore apiCore;
+
+    public MessageFormatter (InvestApiCore apiCore){
+        this.apiCore = apiCore;
+    }
 
     public String reportInstrument(String ticker, Portfolio portfolio,
                                    InstrumentObj targetPosition,
@@ -99,7 +108,7 @@ public class MessageFormatter {
         Map<String, List<InstrumentObj>> groupedInstruments = instrumentObjs.stream()
                 .collect(Collectors.groupingBy(InstrumentObj::getType));
         sb.append("<pre>")
-                .append(String.format("%-14s %-8s %12s %12s\n", "Название", "Кол-во", "Цена", "Стоимость"))
+                .append(String.format("%-14s %-8s %12s %12s %12s %12s\n", "Название", "Кол-во", "Цена", "Стоимость", "SMA", "RSI"))
                 .append("--------------------------------------------------\n");
         for (Map.Entry<String, List<InstrumentObj>> entry : groupedInstruments.entrySet()) {
             String currentType = entry.getKey();
@@ -108,7 +117,27 @@ public class MessageFormatter {
             }
             sb.append("\n<b>").append(getFriendlyTypeName(currentType)).append("</b>\n");
             for (InstrumentObj instrumentObj : entry.getValue()) {
-                sb.append(formatInstrumentMultiLine(instrumentObj));
+                GetTechAnalysisResponse smaResp = apiCore.getTechAnalysis(instrumentObj.getFigi(),
+                        GetTechAnalysisRequest.IndicatorType.INDICATOR_TYPE_SMA,
+                        GetTechAnalysisRequest.IndicatorInterval.INDICATOR_INTERVAL_ONE_DAY,
+                        0,
+                        200);
+                GetTechAnalysisResponse rsiWeekResp = apiCore.getTechAnalysis(instrumentObj.getFigi(),
+                        GetTechAnalysisRequest.IndicatorType.INDICATOR_TYPE_RSI,
+                        GetTechAnalysisRequest.IndicatorInterval.INDICATOR_INTERVAL_WEEK,
+                        0,
+                        14);
+                Quotation sma = null;
+                Quotation rsiWeek = null;
+                if(smaResp.getTechnicalIndicatorsList().size() >0){
+                    sma = smaResp.getTechnicalIndicators(0).getSignal();
+                }
+                if(rsiWeekResp.getTechnicalIndicatorsList().size() >0){
+                    rsiWeek = rsiWeekResp.getTechnicalIndicators(0).getSignal();
+                }
+                sb.append(formatInstrumentMultiLine(instrumentObj,
+                        quotationToBigDecimal(sma),
+                        quotationToBigDecimal(rsiWeek)));
             }
         }
         sb.append("</pre>");
@@ -170,6 +199,12 @@ public class MessageFormatter {
                 smaValue.setScale(2, RoundingMode.HALF_UP)
         );
     }
+    private String formatTrendShort(BigDecimal currentPrice, BigDecimal smaValue) {
+        if (currentPrice == null || smaValue == null || smaValue.signum() == 0) {
+            return "недостаточно данных";
+        }
+        return  currentPrice.compareTo(smaValue) > 0 ? "✅ Бычий" : "❌ Медвежий";
+    }
 
     private String formatRsi(BigDecimal rsiValue) {
         if (rsiValue == null) {
@@ -184,6 +219,21 @@ public class MessageFormatter {
             rsiStatus = "⚖️ Нейтральный";
         }
         return String.format(" • Недельный RSI(14): %s (%s)\n", rsiStatus, rsiValue.setScale(2, RoundingMode.HALF_UP));
+    }
+
+    private String formatRsiShort(BigDecimal rsiValue) {
+        if (rsiValue == null) {
+            return " • Недельный RSI(14): недостаточно данных\n";
+        }
+        String rsiStatus;
+        if (rsiValue.compareTo(new BigDecimal("70")) > 0) {
+            rsiStatus = "🥵 Перекупленность";
+        } else if (rsiValue.compareTo(new BigDecimal("35")) < 0) {
+            rsiStatus = "🥶 Перепроданность";
+        } else {
+            rsiStatus = "⚖️ Нейтральный";
+        }
+        return rsiStatus;
     }
 
     private String formatDividends(List<Dividend> dividends, InstrumentObj targetPosition) {
@@ -240,7 +290,8 @@ public class MessageFormatter {
      * 1-я строка: Название, Кол-во, Цена, Стоимость.
      * 2-я строка: Отступ и информация о прибыли (P/L).
      */
-    private String formatInstrumentMultiLine(InstrumentObj instrumentObj) {
+    private String formatInstrumentMultiLine(InstrumentObj instrumentObj, BigDecimal sma200,
+                                             BigDecimal weeklyRsi) {
         StringBuilder sb = new StringBuilder();
         DecimalFormat qtyFormat = new DecimalFormat("#,###.##");
         DecimalFormat priceFormat = new DecimalFormat("#,##0.00");
@@ -253,7 +304,8 @@ public class MessageFormatter {
                 + getCurrencySymbol(instrumentObj.getCurrentPrice().getCurrency());
         String totalPriceStr = priceFormat.format(instrumentObj.getCurrentPrice().getValue()
                 .multiply(instrumentObj.getQuantity())) + getCurrencySymbol(instrumentObj.getCurrentPrice().getCurrency());
-        sb.append(String.format("%-14s %-8s %12s %12s\n", name, quantityStr, priceStr, totalPriceStr));
+        sb.append(String.format("%-14s %-8s %12s %12s %12s %12s\n", name, quantityStr, priceStr, totalPriceStr,
+                formatTrendShort(instrumentObj.getCurrentPrice().getValue(),sma200), weeklyRsi));
         BigDecimal profitValue = instrumentObj.getTotalProfit();
         Money averageBuyPrice = instrumentObj.getAverageBuyPrice();
         if (profitValue != null && profitValue.signum() != 0) {
