@@ -202,7 +202,7 @@ public class MessageFormatter {
         String rsiStatus;
         if (rsiValue.compareTo(new BigDecimal("70")) > 0) {
             rsiStatus = "🥵 Перекупленность";
-        } else if (rsiValue.compareTo(new BigDecimal("35")) < 0) {
+        } else if (rsiValue.compareTo(new BigDecimal("30")) < 0) {
             rsiStatus = "🥶 Перепроданность";
         } else {
             rsiStatus = "⚖️ Нейтральный";
