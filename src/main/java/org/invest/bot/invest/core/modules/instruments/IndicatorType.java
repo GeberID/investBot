@@ -8,7 +8,7 @@ public enum IndicatorType {
             GetTechAnalysisRequest.IndicatorType.INDICATOR_TYPE_SMA,
             GetTechAnalysisRequest.IndicatorInterval.INDICATOR_INTERVAL_ONE_DAY,
             200,
-            280,
+            0,
             null,
             0,
             0,
@@ -18,18 +18,22 @@ public enum IndicatorType {
             GetTechAnalysisRequest.IndicatorType.INDICATOR_TYPE_RSI,
             GetTechAnalysisRequest.IndicatorInterval.INDICATOR_INTERVAL_WEEK,
             14,
-            140,
+            0,
             null,
             0
             ,0,
             0
-    );
-    /*MACD_WEEKLY(
+    ),
+    MACD_WEEKLY(
             GetTechAnalysisRequest.IndicatorType.INDICATOR_TYPE_MACD,
             GetTechAnalysisRequest.IndicatorInterval.INDICATOR_INTERVAL_WEEK,
-            0, // length не используется для MACD
-            250 // Нужна достаточная история для расчета EMA (3-4 месяца)
-    );*/
+            0,
+            0,
+            null,
+            12,
+            26,
+            9
+    );
 
     private final GetTechAnalysisRequest.IndicatorType apiType;
     private final GetTechAnalysisRequest.IndicatorInterval interval;

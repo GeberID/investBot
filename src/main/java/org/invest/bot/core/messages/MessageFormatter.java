@@ -28,6 +28,8 @@ public class MessageFormatter {
                                    Position portfolioPosition,
                                    BigDecimal sma200,
                                    BigDecimal weeklyRsi,
+                                   BigDecimal macdLine,
+                                   BigDecimal signalLine,
                                    List<Dividend> dividends) {
         if (targetPosition == null || portfolioPosition == null) {
             return String.format("Инструмент с тикером '%s' не найден в вашем портфеле.", ticker);
@@ -70,7 +72,7 @@ public class MessageFormatter {
         report.append("\n<b>Технический анализ (долгосрок):</b>\n")
                 .append(formatTrend(portfolioPosition.getCurrentPrice().getValue(), sma200))
                 .append(formatRsi(weeklyRsi))
-
+                .append(formatMacd(macdLine,signalLine))
                 // --- НОВЫЙ БЛОК: "Корпоративные события" ---
                 .append("\n<b>Корпоративные события:</b>\n")
                 .append(formatDividends(dividends, targetPosition) + "\n")
@@ -191,6 +193,24 @@ public class MessageFormatter {
         }
         return String.format(" • Недельный RSI(14): %s (%s)\n", rsiStatus, rsiValue.setScale(2, RoundingMode.HALF_UP));
     }
+
+    private String formatMacd(BigDecimal macdLine,BigDecimal signalLine) {
+        if (macdLine == null && signalLine == null) {
+            return " • Импульс (MACD): недостаточно данных\n";
+        }
+        String status;
+        if (macdLine.compareTo(signalLine) > 0) {
+            status = "✅ Бычий (линия MACD выше сигнальной)";
+        } else if (macdLine.compareTo(signalLine) < 0) {
+            status = "❌ Медвежий (линия MACD ниже сигнальной)";
+        } else {
+            status = "⚖️ Нейтральный (линии пересеклись)";
+        }
+        BigDecimal histogram = macdLine.subtract(signalLine).setScale(2, RoundingMode.HALF_UP);
+        return String.format(" • Импульс (MACD): %s\n   └ Гистограмма: %s\n", status, histogram);
+    }
+
+
 
     private String formatRsiShort(BigDecimal rsiValue) {
         if (rsiValue == null) {
