@@ -12,11 +12,13 @@ import ru.tinkoff.piapi.core.models.Position;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
+import java.time.Instant;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.invest.bot.core.DataConvertUtility.getPercentCount;
+import static org.invest.bot.core.DataConvertUtility.*;
 
 @Component
 public class MessageFormatter {
@@ -37,11 +39,11 @@ public class MessageFormatter {
         BigDecimal percentage = getPercentCount(portfolio.getTotalAmountPortfolio(),
                 targetPosition.getQuantity().multiply(targetPosition.getCurrentPrice().getValue()));
 
-        report.append("<b>Позиция в портфеле:</b>\n");
-        report.append(String.format(" • Количество: %s шт.\n", portfolioPosition.getQuantity().setScale(0, RoundingMode.DOWN)));
-        report.append(String.format(" • Средняя цена: %s\n", formatMoney(portfolioPosition.getAveragePositionPrice())));
-        report.append(String.format(" • Текущая цена: %s\n", formatMoney(portfolioPosition.getCurrentPrice())));
-        report.append(String.format(" • Вся цена: %s\n", portfolioPosition.getCurrentPrice().getValue()
+        report.append("<b>Позиция в портфеле:</b>\n")
+                .append(String.format(" • Количество: %s шт.\n", portfolioPosition.getQuantity().setScale(0, RoundingMode.DOWN)))
+                .append(String.format(" • Средняя цена: %s\n", formatMoney(portfolioPosition.getAveragePositionPrice())))
+                .append(String.format(" • Текущая цена: %s\n", formatMoney(portfolioPosition.getCurrentPrice())))
+                .append(String.format(" • Вся цена: %s\n", portfolioPosition.getCurrentPrice().getValue()
                 .multiply(portfolioPosition.getQuantity()).setScale(2,RoundingMode.HALF_UP)));
 
         report.append("\n<b>Финансовый результат:</b>\n");
@@ -64,19 +66,17 @@ public class MessageFormatter {
         } else {
             report.append(" • Данные о прибыли недоступны.\n");
         }
-        report.append("\n<b>Анализ:</b>\n");
-        report.append(" • SMA: ");
-        report.append(sma200).append("\n");
-        report.append(" • WeeklyRsi: ");
-        report.append(weeklyRsi).append("\n");
-        report.append(" • Дивиденты: ");
-        report.append(dividends).append("\n");
+        // --- НОВЫЙ БЛОК: "Технический анализ" ---
+        report.append("\n<b>Технический анализ (долгосрок):</b>\n")
+                .append(formatTrend(portfolioPosition.getCurrentPrice().getValue(), sma200))
+                .append(formatRsi(weeklyRsi))
 
-        // --- Шаг 4: Блок "Роль в стратегии" (пока заглушка) ---
-        report.append("\n<b>Роль в стратегии:</b>\n");
-        report.append(" • Доля в портфеле: ");
-        report.append(percentage).append("\n");
-        report.append(" • Тип: Спутник\n");
+        // --- НОВЫЙ БЛОК: "Корпоративные события" ---
+                .append("\n<b>Корпоративные события:</b>\n")
+                .append(formatDividends(dividends,targetPosition) + "\n")
+                .append(" • Доля в портфеле: ")
+                .append(percentage).append("\n")
+                .append(" • Тип: Спутник\n");
 
         return report.toString();
     }
@@ -99,9 +99,9 @@ public class MessageFormatter {
         }
         Map<String, List<InstrumentObj>> groupedInstruments = instrumentObjs.stream()
                 .collect(Collectors.groupingBy(InstrumentObj::getType));
-        sb.append("<pre>");
-        sb.append(String.format("%-14s %-8s %12s %12s\n", "Название", "Кол-во", "Цена", "Стоимость"));
-        sb.append("--------------------------------------------------\n");
+        sb.append("<pre>")
+                .append(String.format("%-14s %-8s %12s %12s\n", "Название", "Кол-во", "Цена", "Стоимость"))
+                .append("--------------------------------------------------\n");
         for (Map.Entry<String, List<InstrumentObj>> entry : groupedInstruments.entrySet()) {
             String currentType = entry.getKey();
             if (!filterType.equals("all") && !currentType.equals(filterType)) {
@@ -156,6 +156,49 @@ public class MessageFormatter {
             default:
                 return " " + currencyCode;
         }
+    }
+
+    // --- НОВЫЕ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ДЛЯ ФОРМАТИРОВАНИЯ ---
+
+    private String formatTrend(BigDecimal currentPrice, BigDecimal smaValue) {
+        if (currentPrice == null || smaValue == null || smaValue.signum() == 0) {
+            return " • Тренд (vs SMA 200): недостаточно данных\n";
+        }
+        String trend = currentPrice.compareTo(smaValue) > 0 ? "✅ Бычий" : "❌ Медвежий";
+        return String.format(" • Тренд (vs SMA 200): %s (%s / %s)\n",
+                trend,
+                currentPrice.setScale(2, RoundingMode.HALF_UP),
+                smaValue.setScale(2, RoundingMode.HALF_UP)
+        );
+    }
+
+    private String formatRsi(BigDecimal rsiValue) {
+        if (rsiValue == null) {
+            return " • Недельный RSI(14): недостаточно данных\n";
+        }
+        String rsiStatus;
+        if (rsiValue.compareTo(new BigDecimal("70")) > 0) {
+            rsiStatus = "🥵 Перекупленность";
+        } else if (rsiValue.compareTo(new BigDecimal("35")) < 0) {
+            rsiStatus = "🥶 Перепроданность";
+        } else {
+            rsiStatus = "⚖️ Нейтральный";
+        }
+        return String.format(" • Недельный RSI(14): %s (%s)\n", rsiStatus, rsiValue.setScale(2, RoundingMode.HALF_UP));
+    }
+
+    private String formatDividends(List<Dividend> dividends, InstrumentObj targetPosition) {
+        if (dividends == null || dividends.isEmpty()) {
+            return " • Дивиденды в ближайший год не анонсированы.\n";
+        }
+        StringBuilder sb = new StringBuilder();
+        Dividend nextDividend = dividends.get(0); // API возвращает их отсортированными по дате
+        sb.append(" • Ближайшие дивиденды:" + convertTimeStampToStringWithoutYearSymbol(nextDividend.getLastBuyDate()) + "\n")
+                .append(" • Cумма дивидендов на 1 акцию: ")
+                .append(nextDividend.getDividendNet().getUnits() + " " +nextDividend.getDividendNet().getCurrency() +"\n")
+                .append(" • Получишь дивидендов: " +  targetPosition.getQuantity().multiply(BigDecimal.valueOf(nextDividend.getDividendNet().getUnits())));
+
+        return sb.toString();
     }
 
     /**

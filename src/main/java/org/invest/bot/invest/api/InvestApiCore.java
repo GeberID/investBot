@@ -49,7 +49,11 @@ public class InvestApiCore {
     public List<Dividend> getDividends(String instrumentFigi){
         Instant now = Instant.now();
         Instant yearAhead = now.plus(365, ChronoUnit.DAYS);
-        return api.getInstrumentsService().getDividendsSync(instrumentFigi, now, yearAhead);
+        List<Dividend> dividends = api.getInstrumentsService().getDividendsSync(instrumentFigi, now, yearAhead);
+        if(dividends.equals(null)){
+            return new ArrayList<>();
+        }
+        return dividends;
     }
 
     public GetTechAnalysisResponse getTechAnalysis(
