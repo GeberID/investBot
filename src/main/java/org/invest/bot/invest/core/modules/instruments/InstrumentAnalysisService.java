@@ -51,6 +51,4 @@ public class InstrumentAnalysisService {
         return messageFormatter.reportInstrument(ticker,portfolio, instrumentObj, portfolioPosition,sma200, weeklyRsi,
                 macdLine,signalLine,dividends);
     }
-
-
 }

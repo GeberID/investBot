@@ -37,49 +37,10 @@ public class MessageFormatter {
 
         StringBuilder report = new StringBuilder();
         report.append(String.format("<b>Сводка по %s (%s)</b>\n\n", targetPosition.getName(), targetPosition.getTicker()));
-
-        BigDecimal percentage = getPercentCount(portfolio.getTotalAmountPortfolio(),
-                targetPosition.getQuantity().multiply(targetPosition.getCurrentPrice().getValue()));
-
-        report.append("<b>Позиция в портфеле:</b>\n")
-                .append(String.format(" • Количество: %s шт.\n", portfolioPosition.getQuantity().setScale(0, RoundingMode.DOWN)))
-                .append(String.format(" • Средняя цена: %s\n", formatMoney(portfolioPosition.getAveragePositionPrice())))
-                .append(String.format(" • Текущая цена: %s\n", formatMoney(portfolioPosition.getCurrentPrice())))
-                .append(String.format(" • Вся цена: %s\n", portfolioPosition.getCurrentPrice().getValue()
-                        .multiply(portfolioPosition.getQuantity()).setScale(2, RoundingMode.HALF_UP)));
-
-        report.append("\n<b>Финансовый результат:</b>\n");
-
-        BigDecimal profitValue = targetPosition.getTotalProfit();
-        Money averageBuyPrice = targetPosition.getAverageBuyPrice();
-
-        if (profitValue != null && averageBuyPrice != null) {
-            BigDecimal totalInvested = averageBuyPrice.getValue().multiply(targetPosition.getQuantity());
-
-            BigDecimal profitPercentage = BigDecimal.ZERO;
-            if (totalInvested.signum() != 0) {
-                profitPercentage = profitValue.multiply(BigDecimal.valueOf(100))
-                        .divide(totalInvested, 2, RoundingMode.HALF_UP);
-            }
-            String profitCurrencySymbol = getCurrencySymbol(averageBuyPrice.getCurrency());
-            String profitStr = formatProfit(profitValue, profitCurrencySymbol);
-            String percentageStr = formatPercentage(profitPercentage);
-            report.append(String.format(" • Прибыль/убыток: %s (%s)\n", profitStr, percentageStr));
-        } else {
-            report.append(" • Данные о прибыли недоступны.\n");
-        }
-        // --- НОВЫЙ БЛОК: "Технический анализ" ---
-        report.append("\n<b>Технический анализ (долгосрок):</b>\n")
-                .append(formatTrend(portfolioPosition.getCurrentPrice().getValue(), sma200))
-                .append(formatRsi(weeklyRsi))
-                .append(formatMacd(macdLine,signalLine))
-                // --- НОВЫЙ БЛОК: "Корпоративные события" ---
-                .append("\n<b>Корпоративные события:</b>\n")
-                .append(formatDividends(dividends, targetPosition) + "\n")
-                .append(" • Доля в портфеле: ")
-                .append(percentage).append("\n")
-                .append(" • Тип: Спутник\n");
-
+        positionFormatter(report,portfolioPosition);
+        finResultFormatter(report,targetPosition);
+        techAnalyseFormatter(report,portfolioPosition,sma200,weeklyRsi,macdLine,signalLine);
+        corporateSituationsFormatter(report,portfolio,targetPosition,dividends);
         return report.toString();
     }
 
@@ -160,6 +121,67 @@ public class MessageFormatter {
         }
     }
 
+    private StringBuilder positionFormatter(StringBuilder report,Position portfolioPosition){
+                report.append("<b>Позиция в портфеле:</b>\n")
+                .append(String.format(" • Количество: %s шт.\n", portfolioPosition.getQuantity().setScale(0, RoundingMode.DOWN)))
+                .append(String.format(" • Средняя цена: %s\n", formatMoney(portfolioPosition.getAveragePositionPrice())))
+                .append(String.format(" • Текущая цена: %s\n", formatMoney(portfolioPosition.getCurrentPrice())))
+                .append(String.format(" • Вся цена: %s\n", portfolioPosition.getCurrentPrice().getValue()
+                        .multiply(portfolioPosition.getQuantity()).setScale(2, RoundingMode.HALF_UP)));
+        return report;
+    }
+
+    private StringBuilder techAnalyseFormatter(StringBuilder report,
+                                               Position portfolioPosition,
+                                               BigDecimal sma200,
+                                               BigDecimal weeklyRsi,
+                                               BigDecimal macdLine,
+                                               BigDecimal signalLine){
+        report.append("\n<b>Технический анализ (долгосрок):</b>\n")
+                .append(formatTrend(portfolioPosition.getCurrentPrice().getValue(), sma200))
+                .append(formatRsi(weeklyRsi))
+                .append(formatMacd(macdLine,signalLine));
+        return report;
+    }
+
+    private StringBuilder finResultFormatter(StringBuilder report,  InstrumentObj targetPosition){
+        report.append("\n<b>Финансовый результат:</b>\n");
+
+        BigDecimal profitValue = targetPosition.getTotalProfit();
+        Money averageBuyPrice = targetPosition.getAverageBuyPrice();
+
+        if (profitValue != null && averageBuyPrice != null) {
+            BigDecimal totalInvested = averageBuyPrice.getValue().multiply(targetPosition.getQuantity());
+
+            BigDecimal profitPercentage = BigDecimal.ZERO;
+            if (totalInvested.signum() != 0) {
+                profitPercentage = profitValue.multiply(BigDecimal.valueOf(100))
+                        .divide(totalInvested, 2, RoundingMode.HALF_UP);
+            }
+            String profitCurrencySymbol = getCurrencySymbol(averageBuyPrice.getCurrency());
+            String profitStr = formatProfit(profitValue, profitCurrencySymbol);
+            String percentageStr = formatPercentage(profitPercentage);
+            report.append(String.format(" • Прибыль/убыток: %s (%s)\n", profitStr, percentageStr));
+        } else {
+            report.append(" • Данные о прибыли недоступны.\n");
+        }
+        return report;
+    }
+
+    private StringBuilder corporateSituationsFormatter(StringBuilder report,
+                                                       Portfolio portfolio,
+                                                       InstrumentObj targetPosition,
+                                                       List<Dividend> dividends){
+        report.append("\n<b>Корпоративные события:</b>\n")
+                .append(formatDividends(dividends, targetPosition) + "\n")
+                .append(" • Доля в портфеле: ")
+                .append(getPercentCount(portfolio.getTotalAmountPortfolio(),
+                        targetPosition.getQuantity().multiply(targetPosition.getCurrentPrice().getValue())))
+                .append("\n")
+                .append(" • Тип: Спутник\n");
+        return report;
+    }
+
 
     private String formatTrend(BigDecimal currentPrice, BigDecimal smaValue) {
         if (currentPrice == null || smaValue == null || smaValue.signum() == 0) {
@@ -171,12 +193,6 @@ public class MessageFormatter {
                 currentPrice.setScale(2, RoundingMode.HALF_UP),
                 smaValue.setScale(2, RoundingMode.HALF_UP)
         );
-    }
-    private String formatTrendShort(BigDecimal currentPrice, BigDecimal smaValue) {
-        if (currentPrice == null || smaValue == null || smaValue.signum() == 0) {
-            return "недостаточно данных";
-        }
-        return  currentPrice.compareTo(smaValue) > 0 ? "✅ Бычий" : "❌ Медвежий";
     }
 
     private String formatRsi(BigDecimal rsiValue) {
@@ -210,23 +226,6 @@ public class MessageFormatter {
         return String.format(" • Импульс (MACD): %s\n   └ Гистограмма: %s\n", status, histogram);
     }
 
-
-
-    private String formatRsiShort(BigDecimal rsiValue) {
-        if (rsiValue == null) {
-            return " • Недельный RSI(14): недостаточно данных\n";
-        }
-        String rsiStatus;
-        if (rsiValue.compareTo(new BigDecimal("70")) > 0) {
-            rsiStatus = "Перекупленность";
-        } else if (rsiValue.compareTo(new BigDecimal("35")) < 0) {
-            rsiStatus = "Перепроданность";
-        } else {
-            rsiStatus = "Нейтральный";
-        }
-        return rsiStatus;
-    }
-
     private String formatDividends(List<Dividend> dividends, InstrumentObj targetPosition) {
         if (dividends == null || dividends.isEmpty()) {
             return " • Дивиденды в ближайший год не анонсированы.\n";
@@ -255,7 +254,6 @@ public class MessageFormatter {
     }
 
     /**
-     * НОВЫЙ ПРИВАТНЫЙ МЕТОД
      * Возвращает человекочитаемое имя для целевого показателя.
      */
     private String getFriendlyNameForTarget(BalanceModuleConf target) {
