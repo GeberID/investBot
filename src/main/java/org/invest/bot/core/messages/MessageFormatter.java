@@ -3,6 +3,9 @@ package org.invest.bot.core.messages;
 import org.invest.bot.invest.api.InvestApiCore;
 import org.invest.bot.invest.core.modules.balanse.AnalysisResult;
 import org.invest.bot.invest.core.modules.balanse.BalanceModuleConf;
+import org.invest.bot.invest.core.modules.balanse.RebalancePlan;
+import org.invest.bot.invest.core.modules.balanse.actions.BuyAction;
+import org.invest.bot.invest.core.modules.balanse.actions.SellAction;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Component;
 import ru.tinkoff.piapi.contract.v1.Dividend;
@@ -22,6 +25,52 @@ import static org.invest.bot.core.DataConvertUtility.getPercentCount;
 
 @Component
 public class MessageFormatter {
+    /**
+     * НОВЫЙ ПУБЛИЧНЫЙ МЕТОД
+     * Форматирует план ребалансировки в понятное для человека сообщение.
+     * @param plan Объект RebalancePlan, полученный от RebalanceService.
+     * @return Готовый к отправке текст сообщения.
+     */
+    public String formatRebalancePlan(RebalancePlan plan) {
+        // --- Сценарий 1: Портфель уже сбалансирован ---
+        if (plan.sellActions().isEmpty() && plan.buyActions().isEmpty()) {
+            return "✅ <b>План ребалансировки</b>\n\n" +
+                    "Ваш портфель идеально сбалансирован в рамках установленных допусков. " +
+                    "Никаких действий не требуется. Отличная работа!";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("<b>План Ребалансировки Портфеля</b>\n\n");
+
+        // --- Сценарий 2: Есть что продать и на что купить ---
+        if (!plan.sellActions().isEmpty()) {
+            // --- Блок Продажи ---
+            sb.append(formatSellBlock(plan.sellActions(), plan.totalCashFromSales()));
+
+            // --- Блок Покупки ---
+            if (!plan.buyActions().isEmpty()) {
+                sb.append(formatBuyBlock(plan.buyActions(), plan.totalCashFromSales()));
+            } else {
+                // Этот случай возможен, если, например, нужно только продать излишки
+                sb.append("\n<b>Шаг 2: Размещение средств</b>\n");
+                sb.append(String.format("<i>Рекомендуется направить высвобожденные средства (%s ₽) в резерв (TMON).</i>\n",
+                        formatAmount(plan.totalCashFromSales())));
+            }
+        }
+        // --- Сценарий 3: Нужно только покупать (например, после пополнения счета) ---
+        else if (!plan.buyActions().isEmpty()) {
+            sb.append("<b>План пополнения баланса</b>\n\n");
+            sb.append("<i>Обнаружены классы активов с долей ниже целевой. Рекомендуется направить средства на их пополнение:</i>\n");
+            for (BuyAction action : plan.buyActions()) {
+                String className = getFriendlyClassName(action.assetClass());
+                sb.append(String.format(" • Увеличить долю <b>%s</b> на сумму ~<b>%s ₽</b>\n",
+                        className, formatAmount(action.amount())));
+            }
+        }
+
+        sb.append("\n<i>Все расчеты являются приблизительными.</i>");
+        return sb.toString();
+    }
 
     public String reportInstrument(String ticker, Portfolio portfolio,
                                    InstrumentObj targetPosition,
@@ -98,7 +147,7 @@ public class MessageFormatter {
             BigDecimal fact = entry.getValue();
             sb.append("\n• ").append(formatDeviationLine(target, fact));
         }
-        for (String problem : result.concentrationProblems) {
+        for (String problem : result.concentrationProblems.getConcentrationHumanProblems()) {
             sb.append("\n• ").append(problem);
         }
         sb.append("\n\n<i>Рекомендуется провести ребалансировку.</i>");
@@ -384,5 +433,55 @@ public class MessageFormatter {
     private String formatMoney(ru.tinkoff.piapi.core.models.Money money) {
         if (money == null) return "N/A";
         return money.getValue().setScale(2, RoundingMode.HALF_UP) + " " + money.getCurrency().toUpperCase();
+    }
+
+    /**
+     * Приватный хелпер для форматирования блока "Продажа".
+     */
+    private String formatSellBlock(List<SellAction> sellActions, BigDecimal totalCash) {
+        return String.format("<b>Шаг 1: Продажа (высвободится ~%s ₽)</b>\n", formatAmount(totalCash)) +
+                sellActions.stream()
+                        .map(action -> String.format(" • Продать <b>%s</b> на сумму ~<b>%s ₽</b>\n   └ <i>Причина: %s</i>",
+                                action.name(), formatAmount(action.amount()), action.reason()))
+                        .collect(Collectors.joining("\n"));
+    }
+
+    /**
+     * Приватный хелпер для форматирования блока "Покупка".
+     */
+    private String formatBuyBlock(List<BuyAction> buyActions, BigDecimal totalCash) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("\n<b>Шаг 2: Покупка (на ~%s ₽)</b>\n", formatAmount(totalCash)));
+        sb.append("<i>Рекомендуется пропорционально распределить средства:</i>\n");
+
+        for (BuyAction action : buyActions) {
+            String className = getFriendlyClassName(action.assetClass());
+            sb.append(String.format(" • Направить на <b>%s</b> ~<b>%s ₽</b>\n",
+                    className, formatAmount(action.amount())));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Приватный хелпер для получения "красивых" имен классов активов.
+     */
+    private String getFriendlyClassName(BalanceModuleConf target) {
+        switch (target) {
+            case TARGET_STOCK_CORE_PERCENTAGE: return "Акции (Ядро)";
+            case TARGET_STOCK_SATELLITE__PERCENTAGE: return "Акции (Спутники)";
+            case TARGET_BOND_PERCENTAGE: return "Облигации";
+            case TARGET_PROTECTION_PERCENTAGE: return "Защита";
+            case TARGET_RESERVE_PERCENTAGE: return "Резерв";
+            default: return "Категория";
+        }
+    }
+
+    /**
+     * Приватный хелпер для красивого форматирования денежных сумм.
+     */
+    private String formatAmount(BigDecimal amount) {
+        // Используем DecimalFormat для разделения тысяч пробелами
+        DecimalFormat formatter = new DecimalFormat("#,###");
+        return formatter.format(amount).replace(",", " ");
     }
 }

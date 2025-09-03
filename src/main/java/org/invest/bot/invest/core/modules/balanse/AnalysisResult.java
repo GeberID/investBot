@@ -6,12 +6,14 @@ import java.util.Map;
 
 public class AnalysisResult {
     public final Map<BalanceModuleConf, BigDecimal> classDeviations;
-    public final List<String> concentrationProblems;
-    public AnalysisResult(Map<BalanceModuleConf, BigDecimal> classDeviations, List<String> concentrationProblems) {
+    public final ConcentrationProblem concentrationProblems;
+    public AnalysisResult(Map<BalanceModuleConf, BigDecimal> classDeviations, ConcentrationProblem concentrationProblems) {
         this.classDeviations = classDeviations;
         this.concentrationProblems = concentrationProblems;
     }
     public boolean hasDeviations() {
-        return !classDeviations.isEmpty() || !concentrationProblems.isEmpty();
+        return !classDeviations.isEmpty() ||
+                !concentrationProblems.getConcentrationHumanProblems().isEmpty() ||
+                !concentrationProblems.getConcentrationInstrumentProblems().isEmpty();
     }
 }

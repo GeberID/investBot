@@ -36,4 +36,8 @@ public enum BalanceModuleConf {
                 "RUB000UTSTOM"  // FIGI для RUB
         );
     }
+    public boolean isClassTarget() {
+        // Просто проверяем, содержит ли имя константы слово "TARGET"
+        return this.name().startsWith("TARGET_");
+    }
 }

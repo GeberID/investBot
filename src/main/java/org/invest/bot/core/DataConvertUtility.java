@@ -13,14 +13,15 @@ import java.util.Date;
 
 public final class DataConvertUtility {
     public static BigDecimal getPercentCount(Money total, Money instrument){
-        return instrument.getValue()
-                .multiply(new BigDecimal(100))
-                .divide(total.getValue(), 2, RoundingMode.HALF_UP);
+        return getPercentCount(total.getValue(),instrument.getValue());
     }
-    public static BigDecimal getPercentCount(Money total, BigDecimal instrument){
+    public static BigDecimal getPercentCount(BigDecimal total, BigDecimal instrument){
         return instrument
                 .multiply(new BigDecimal(100))
-                .divide(total.getValue(), 2, RoundingMode.HALF_UP);
+                .divide(total, 2, RoundingMode.HALF_UP);
+    }
+    public static BigDecimal getPercentCount(Money total, BigDecimal instrument){
+        return getPercentCount(total.getValue(),instrument);
     }
 
     public static BigDecimal quotationToBigDecimal(MoneyValue quotation) {

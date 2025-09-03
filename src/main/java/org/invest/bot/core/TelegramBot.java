@@ -169,11 +169,11 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
     }
     private void performAnalysisAndNotify(boolean checkChanges) {
         try {
-            Account account = apiCore.getAccounts().get(0);
+            Account account = apiCore.getAccounts().get(1);
             Portfolio portfolio = apiCore.getPortfolio(account.getId());
             List<InstrumentObj> instrumentObjs = apiCore.getInstruments(portfolio);
 
-            AnalysisResult currentResult = balanceService.findTotalDeviation(portfolio, instrumentObjs);
+            AnalysisResult currentResult = balanceService.analyzePortfolio(portfolio, instrumentObjs);
             if (checkChanges && currentResult.equals(lastSentDeviations)) {
                 log.info("Отклонения для chatId {} не изменились. Отправка пропущена.", userChatId);
                 return;
@@ -181,6 +181,8 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
             String messageText = messageFormatter.formatBalanceDeviations(currentResult);
             executeMethod(PrepareMessage.createMessage(userChatId, messageText));
             this.lastSentDeviations = currentResult;
+
+            executeMethod(PrepareMessage.createMessage(userChatId, messageFormatter.formatRebalancePlan(balanceService.createPlan(portfolio,instrumentObjs))));
         } catch (Exception e) {
             log.error("Ошибка во время анализа для chatId {}: {}", userChatId, e.getMessage());
         }
