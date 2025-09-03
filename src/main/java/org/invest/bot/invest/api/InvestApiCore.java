@@ -11,6 +11,7 @@ import ru.tinkoff.piapi.core.models.Position;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
@@ -56,11 +57,10 @@ public class InvestApiCore {
     }
 
     public GetTechAnalysisResponse getTechAnalysis(
-            String figi,
+            InstrumentObj instrument,
             IndicatorType indicatorType) {
         Instant to = Instant.now();
         Instant from = to.minus(indicatorType.getHistoryDays(),ChronoUnit.DAYS);
-        InstrumentObj instrument = getInstrumentByFigi(figi);
         try {
             return api.getMarketDataService().getTechAnalysis(indicatorType.getApiType(),
                     instrument.getInstrumentUid(),

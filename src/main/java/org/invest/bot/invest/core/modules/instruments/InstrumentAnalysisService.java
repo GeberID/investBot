@@ -38,15 +38,16 @@ public class InstrumentAnalysisService {
         Position portfolioPosition = null;
         if (instrumentObj != null) {
             portfolioPosition = apiCore.getPortfolioPosition(accountId, instrumentObj.getFigi());
-            sma200 = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj.getFigi(),
+            sma200 = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj,
                     SMA_200_DAY).getTechnicalIndicators(0).getSignal());
-            weeklyRsi = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj.getFigi(),
+            weeklyRsi = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj,
                     RSI_14_WEEK).getTechnicalIndicators(0).getSignal());
-            GetTechAnalysisResponse.TechAnalysisItem macd = apiCore.getTechAnalysis(instrumentObj.getFigi(), MACD_WEEKLY).getTechnicalIndicators(0);
+            GetTechAnalysisResponse.TechAnalysisItem macd = apiCore.getTechAnalysis(instrumentObj, MACD_WEEKLY).getTechnicalIndicators(0);
             macdLine = quotationToBigDecimal(macd.getMacd());
             signalLine = quotationToBigDecimal(macd.getSignal());
             // 3. Получаем дивиденды
             dividends = apiCore.getDividends(instrumentObj.getFigi());
+            apiCore.getFundamentalAnalysis(instrumentObj);
         }
         return messageFormatter.reportInstrument(ticker,portfolio, instrumentObj, portfolioPosition,sma200, weeklyRsi,
                 macdLine,signalLine,dividends);
