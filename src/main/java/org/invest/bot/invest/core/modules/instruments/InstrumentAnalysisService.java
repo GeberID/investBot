@@ -47,7 +47,6 @@ public class InstrumentAnalysisService {
             signalLine = quotationToBigDecimal(macd.getSignal());
             // 3. Получаем дивиденды
             dividends = apiCore.getDividends(instrumentObj.getFigi());
-            apiCore.getFundamentalAnalysis(instrumentObj);
         }
         return messageFormatter.reportInstrument(ticker,portfolio, instrumentObj, portfolioPosition,sma200, weeklyRsi,
                 macdLine,signalLine,dividends);
