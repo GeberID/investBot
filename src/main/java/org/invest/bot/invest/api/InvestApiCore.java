@@ -11,7 +11,6 @@ import ru.tinkoff.piapi.core.models.Position;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
@@ -40,6 +39,10 @@ public class InvestApiCore {
                 .orElse(null);
     }
 
+    public Instrument getInstrumentGlobal(String figi){
+        return api.getInstrumentsService().getInstrumentByFigiSync(figi);
+    }
+
     public List<Dividend> getDividends(String instrumentFigi){
         Instant now = Instant.now();
         Instant yearAhead = now.plus(365, ChronoUnit.DAYS);
@@ -48,11 +51,6 @@ public class InvestApiCore {
             return new ArrayList<>();
         }
         return dividends;
-    }
-
-    public List<GetAssetFundamentalsResponse.StatisticResponse> getFundamentals(String figi){
-        InstrumentObj instrument = getInstrumentByFigi(figi);
-        return api.getInstrumentsService().getAssetFundamentalsSync(List.of(getInstrumentByFigi(figi).getInstrumentUid())).getFundamentalsList();
     }
 
 
@@ -110,30 +108,5 @@ public class InvestApiCore {
         Instant now = Instant.now();
         Instant monthAgo = now.minus(30, ChronoUnit.DAYS);
         return api.getOperationsService().getExecutedOperationsSync(accountId, monthAgo, now);
-    }
-
-    /**
-     * Получает базовую информацию об инструменте по его FIGI.
-     * Этот метод НЕ заполняет данные, специфичные для портфеля (количество, цена покупки, профит).
-     * Он нужен как справочник для получения имени и тикера по FIGI.
-     *
-     * @param figi FIGI-идентификатор инструмента.
-     * @return Объект InstrumentObj с базовой информацией или null, если инструмент не найден.
-     */
-    public InstrumentObj getInstrumentByFigi(String figi) {
-        if (figi == null || figi.isEmpty()) {
-            return null;
-        }
-        try {
-            Instrument instrumentByFigiSync = api.getInstrumentsService().getInstrumentByFigiSync(figi);
-            return new InstrumentObj(
-                    instrumentByFigiSync.getName(),instrumentByFigiSync.getUid(),null,null,
-                    instrumentByFigiSync.getInstrumentType(),instrumentByFigiSync.getTicker(),
-                    null,null,instrumentByFigiSync.getFigi());
-        } catch (Exception e) {
-
-            System.err.println("Не удалось получить информацию по FIGI: " + figi + ". Ошибка: " + e.getMessage());
-            return null;
-        }
     }
 }

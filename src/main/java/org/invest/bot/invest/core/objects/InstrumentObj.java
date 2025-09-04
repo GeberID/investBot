@@ -16,19 +16,8 @@ public class InstrumentObj {
     private final BigDecimal totalProfit;
     private final Money averageBuyPrice;
     private final String figi;
-
-    public InstrumentObj(String name, String instrumentUid, BigDecimal quantity, Money currentPrice, String type, String ticker,
-                         BigDecimal totalProfit, Money averageBuyPrice, String figi) {
-        this.name = name;
-        this.instrumentUid = instrumentUid;
-        this.quantity = quantity;
-        this.currentPrice = currentPrice;
-        this.type = type;
-        this.ticker = ticker;
-        this.totalProfit = totalProfit;
-        this.averageBuyPrice = averageBuyPrice;
-        this.figi = figi;
-    }
+    private final Boolean getBuyAvailableFlag;
+    private final int lot;
 
     public InstrumentObj(Position position, Instrument instrument) {
         this.name = instrument.getName();
@@ -40,6 +29,8 @@ public class InstrumentObj {
         this.totalProfit = position.getExpectedYield();
         this.averageBuyPrice = position.getAveragePositionPrice();
         this.figi = position.getFigi();
+        this.getBuyAvailableFlag = instrument.getBuyAvailableFlag();
+        this.lot = instrument.getLot();
     }
 
     public String getName() {

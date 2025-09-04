@@ -10,6 +10,7 @@ import org.invest.bot.invest.core.modules.balanse.BalanceService;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Service;
 import ru.tinkoff.piapi.contract.v1.Account;
+import ru.tinkoff.piapi.contract.v1.Instrument;
 import ru.tinkoff.piapi.contract.v1.MoneyValue;
 import ru.tinkoff.piapi.contract.v1.Operation;
 import ru.tinkoff.piapi.core.models.Portfolio;
@@ -46,37 +47,24 @@ public class AiReportService {
         addPortfolioSummary(portfolioDataNode, portfolio);
         addStrategicAllocation(portfolioDataNode, portfolio, instruments);
         addInstrumentsDetails(portfolioDataNode, instruments);
-        addTransactionLog(portfolioDataNode, operations, instruments);
+        addTransactionLog(portfolioDataNode, operations);
         rootNode.set("portfolio_data", portfolioDataNode);
         File tempFile = File.createTempFile("llm_portfolio_report_", ".json");
         objectMapper.writerWithDefaultPrettyPrinter().writeValue(tempFile, rootNode);
         return tempFile;
     }
 
-    private void addTransactionLog(ObjectNode root, List<Operation> operations, List<InstrumentObj> currentInstruments) {
+    private void addTransactionLog(ObjectNode root, List<Operation> operations) {
         ArrayNode logNode = root.putArray("transaction_log");
         for (Operation op : operations) {
             ObjectNode opNode = logNode.addObject();
-            Optional<InstrumentObj> instrumentOpt = currentInstruments.stream()
-                    .filter(f -> f.getFigi().equals(op.getFigi()))
-                    .findFirst();
-            InstrumentObj instrumentDetails = null;
-            if (instrumentOpt.isPresent()) {
-                instrumentDetails = instrumentOpt.get();
-            } else {
-                instrumentDetails = apiCore.getInstrumentByFigi(op.getFigi());
-            }
+            //Instrument instrumentGlobal = apiCore.getInstrumentGlobal(op.getFigi());
             opNode.put("date", Date.from(Instant.ofEpochSecond(op.getDate().getSeconds())).toString());
             opNode.put("type", op.getType());
             opNode.put("instruments type", op.getInstrumentType());
             opNode.put("figi", op.getFigi());
-            if (instrumentDetails != null) {
-                opNode.put("ticker", instrumentDetails.getTicker());
-                opNode.put("name", instrumentDetails.getName());
-            } else {
-                opNode.put("ticker", "N/A");
-                opNode.put("name", "Информация недоступна");
-            }
+            //opNode.put("ticker", instrumentGlobal.getTicker());
+            //opNode.put("name", instrumentGlobal.getName());
             if(!op.getOperationType().equals("OPERATION_TYPE_COUPON")){
                 opNode.put("quantity", op.getQuantity());
             }else {
