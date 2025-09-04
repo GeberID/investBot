@@ -65,46 +65,6 @@ public class BalanceService {
         return new RebalancePlan(sellActions, buyActions, totalCashFromSales);
     }
 
-    /*public AnalysisResult findTotalDeviation(Portfolio portfolio, List<InstrumentObj> instrumentObjs) {
-        Map<BalanceModuleConf, BigDecimal> classDeviations = new HashMap<>();
-        Money totalValue = portfolio.getTotalAmountPortfolio();
-        if (totalValue.getValue().signum() == 0) {
-            return new AnalysisResult(new HashMap<>(), new ConcentrationProblem(new ArrayList<>(), new ArrayList<>()));
-        }
-
-        // --- ШАГ 1: Получаем карту с ПРАВИЛЬНО рассчитанными стоимостями всех групп ---
-        Map<AssetGroup, BigDecimal> actualValues = calculateActualGroupValues(instrumentObjs);
-
-        // --- ШАГ 2: Итерируемся по enum и используем ТОЛЬКО наши точные расчеты ---
-        for (BalanceModuleConf target : BalanceModuleConf.values()) {
-            BigDecimal currentValue;
-            switch (target) {
-                // ИСПРАВЛЕНО: Берем данные из нашей рассчитанной карты, а не из API
-                case TARGET_BOND_PERCENTAGE:
-                    currentValue = actualValues.get(AssetGroup.BONDS);
-                    break;
-                case TARGET_STOCK_CORE_PERCENTAGE:
-                    currentValue = actualValues.get(AssetGroup.STOCKS_CORE);
-                    break;
-                case TARGET_STOCK_SATELLITE__PERCENTAGE:
-                    currentValue = actualValues.get(AssetGroup.STOCKS_SATELLITE);
-                    break;
-                case TARGET_RESERVE_PERCENTAGE:
-                    currentValue = actualValues.get(AssetGroup.RESERVE);
-                    break;
-                case TARGET_PROTECTION_PERCENTAGE:
-                    currentValue = actualValues.get(AssetGroup.PROTECTION);
-                    break;
-                default:
-                    continue; // Пропускаем служебные enum'ы
-            }
-            checkAndAddDeviation(classDeviations, target, currentValue, totalValue);
-        }
-
-        // Метод `concentrationProblems` у вас был написан правильно
-        return new AnalysisResult(classDeviations, concentrationProblems(totalValue, instrumentObjs));
-    }*/
-
     /**
      * ПЕРЕПИСАННЫЙ, БОЛЕЕ ЧИСТЫЙ МЕТОД
      * Рассчитывает стоимость КАЖДОЙ стратегической группы за один проход.

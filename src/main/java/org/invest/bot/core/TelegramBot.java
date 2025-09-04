@@ -169,7 +169,7 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
     }
     private void performAnalysisAndNotify(boolean checkChanges) {
         try {
-            Account account = apiCore.getAccounts().get(1);
+            Account account = apiCore.getAccounts().get(0);
             Portfolio portfolio = apiCore.getPortfolio(account.getId());
             List<InstrumentObj> instrumentObjs = apiCore.getInstruments(portfolio);
 

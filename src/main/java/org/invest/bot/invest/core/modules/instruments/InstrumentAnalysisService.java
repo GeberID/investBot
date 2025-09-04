@@ -40,7 +40,7 @@ public class InstrumentAnalysisService {
         if (instrumentObj != null) {
             portfolioPosition = apiCore.getPortfolioPosition(accountId, instrumentObj.getFigi());
             sma50 = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj,
-                    SMA_200_DAY).getTechnicalIndicators(0).getSignal());
+                    SMA_50_DAY).getTechnicalIndicators(0).getSignal());
             sma200 = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj,
                     SMA_200_DAY).getTechnicalIndicators(0).getSignal());
             weeklyRsi = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj,
@@ -51,7 +51,7 @@ public class InstrumentAnalysisService {
             // 3. Получаем дивиденды
             dividends = apiCore.getDividends(instrumentObj.getFigi());
         }
-        return messageFormatter.reportInstrument(ticker,portfolio, instrumentObj, portfolioPosition,sma200, weeklyRsi,
+        return messageFormatter.reportInstrument(ticker,portfolio, instrumentObj, portfolioPosition,sma50,sma200, weeklyRsi,
                 macdLine,signalLine,dividends);
     }
 }

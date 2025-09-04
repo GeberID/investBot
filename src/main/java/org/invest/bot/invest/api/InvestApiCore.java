@@ -40,12 +40,6 @@ public class InvestApiCore {
                 .orElse(null);
     }
 
-    public List<HistoricCandle> getHistoricCandles(String figi, int days, CandleInterval interval) {
-        Instant now = Instant.now();
-        Instant startDate = now.minus(days, ChronoUnit.DAYS);
-        return api.getMarketDataService().getCandlesSync(figi, startDate, now, interval);
-    }
-
     public List<Dividend> getDividends(String instrumentFigi){
         Instant now = Instant.now();
         Instant yearAhead = now.plus(365, ChronoUnit.DAYS);
@@ -55,6 +49,12 @@ public class InvestApiCore {
         }
         return dividends;
     }
+
+    public List<GetAssetFundamentalsResponse.StatisticResponse> getFundamentals(String figi){
+        InstrumentObj instrument = getInstrumentByFigi(figi);
+        return api.getInstrumentsService().getAssetFundamentalsSync(List.of(getInstrumentByFigi(figi).getInstrumentUid())).getFundamentalsList();
+    }
+
 
     public GetTechAnalysisResponse getTechAnalysis(
             InstrumentObj instrument,
