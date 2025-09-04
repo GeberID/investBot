@@ -1,6 +1,5 @@
 package org.invest.bot.core.messages;
 
-import org.invest.bot.invest.api.InvestApiCore;
 import org.invest.bot.invest.core.modules.balanse.AnalysisResult;
 import org.invest.bot.invest.core.modules.balanse.BalanceModuleConf;
 import org.invest.bot.invest.core.modules.balanse.RebalancePlan;
@@ -75,6 +74,7 @@ public class MessageFormatter {
     public String reportInstrument(String ticker, Portfolio portfolio,
                                    InstrumentObj targetPosition,
                                    Position portfolioPosition,
+                                   BigDecimal sma50,
                                    BigDecimal sma200,
                                    BigDecimal weeklyRsi,
                                    BigDecimal macdLine,
@@ -88,7 +88,7 @@ public class MessageFormatter {
         report.append(String.format("<b>Сводка по %s (%s)</b>\n\n", targetPosition.getName(), targetPosition.getTicker()));
         positionFormatter(report,portfolioPosition);
         finResultFormatter(report,targetPosition);
-        techAnalyseFormatter(report,portfolioPosition,sma200,weeklyRsi,macdLine,signalLine);
+        techAnalyseFormatter(report,portfolioPosition,sma50,sma200,weeklyRsi,macdLine,signalLine);
         corporateSituationsFormatter(report,portfolio,targetPosition,dividends);
         return report.toString();
     }
@@ -182,12 +182,14 @@ public class MessageFormatter {
 
     private StringBuilder techAnalyseFormatter(StringBuilder report,
                                                Position portfolioPosition,
+                                               BigDecimal sma50,
                                                BigDecimal sma200,
                                                BigDecimal weeklyRsi,
                                                BigDecimal macdLine,
                                                BigDecimal signalLine){
         report.append("\n<b>Технический анализ (долгосрок):</b>\n")
-                .append(formatTrend(portfolioPosition.getCurrentPrice().getValue(), sma200))
+                .append(formatTrend200(portfolioPosition.getCurrentPrice().getValue(), sma200))
+                .append(formatTrend50(portfolioPosition.getCurrentPrice().getValue(), sma50))
                 .append(formatRsi(weeklyRsi))
                 .append(formatMacd(macdLine,signalLine));
         return report;
@@ -232,12 +234,24 @@ public class MessageFormatter {
     }
 
 
-    private String formatTrend(BigDecimal currentPrice, BigDecimal smaValue) {
+    private String formatTrend200(BigDecimal currentPrice, BigDecimal smaValue) {
         if (currentPrice == null || smaValue == null || smaValue.signum() == 0) {
             return " • Тренд (vs SMA 200): недостаточно данных\n";
         }
         String trend = currentPrice.compareTo(smaValue) > 0 ? "✅ Бычий" : "❌ Медвежий";
         return String.format(" • Тренд (vs SMA 200): %s (%s / %s)\n",
+                trend,
+                currentPrice.setScale(2, RoundingMode.HALF_UP),
+                smaValue.setScale(2, RoundingMode.HALF_UP)
+        );
+    }
+
+    private String formatTrend50(BigDecimal currentPrice, BigDecimal smaValue) {
+        if (currentPrice == null || smaValue == null || smaValue.signum() == 0) {
+            return " • Тренд (vs SMA 50): недостаточно данных\n";
+        }
+        String trend = currentPrice.compareTo(smaValue) > 0 ? "✅ Бычий" : "❌ Медвежий";
+        return String.format(" • Тренд (vs SMA 50): %s (%s / %s)\n",
                 trend,
                 currentPrice.setScale(2, RoundingMode.HALF_UP),
                 smaValue.setScale(2, RoundingMode.HALF_UP)

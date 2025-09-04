@@ -14,6 +14,16 @@ public enum IndicatorType {
             0,
             0
     ),
+    SMA_50_DAY(
+            GetTechAnalysisRequest.IndicatorType.INDICATOR_TYPE_SMA,
+            GetTechAnalysisRequest.IndicatorInterval.INDICATOR_INTERVAL_ONE_DAY,
+            50,
+            0,
+            null,
+            0,
+            0,
+            0
+    ),
     RSI_14_WEEK(
             GetTechAnalysisRequest.IndicatorType.INDICATOR_TYPE_RSI,
             GetTechAnalysisRequest.IndicatorInterval.INDICATOR_INTERVAL_WEEK,

@@ -28,6 +28,7 @@ public class InstrumentAnalysisService {
 
     public String analyzeInstrumentByTicker(String ticker) {
         BigDecimal sma200 = null;
+        BigDecimal sma50 = null;
         BigDecimal weeklyRsi = null;
         BigDecimal macdLine = null;
         BigDecimal signalLine = null;
@@ -38,6 +39,8 @@ public class InstrumentAnalysisService {
         Position portfolioPosition = null;
         if (instrumentObj != null) {
             portfolioPosition = apiCore.getPortfolioPosition(accountId, instrumentObj.getFigi());
+            sma50 = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj,
+                    SMA_200_DAY).getTechnicalIndicators(0).getSignal());
             sma200 = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj,
                     SMA_200_DAY).getTechnicalIndicators(0).getSignal());
             weeklyRsi = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj,
