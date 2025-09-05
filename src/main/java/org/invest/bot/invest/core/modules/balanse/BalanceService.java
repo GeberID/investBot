@@ -1,25 +1,35 @@
 package org.invest.bot.invest.core.modules.balanse;
 
+import lombok.extern.slf4j.Slf4j;
+import org.invest.bot.invest.api.InvestApiCore;
 import org.invest.bot.invest.core.modules.balanse.actions.BuyAction;
 import org.invest.bot.invest.core.modules.balanse.actions.SellAction;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Service;
+import ru.tinkoff.piapi.contract.v1.Instrument;
+import ru.tinkoff.piapi.contract.v1.Quotation;
 import ru.tinkoff.piapi.core.models.Money;
 import ru.tinkoff.piapi.core.models.Portfolio;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static org.invest.bot.core.DataConvertUtility.getPercentCount;
+import static org.invest.bot.core.DataConvertUtility.quotationToBigDecimal;
 import static org.invest.bot.invest.core.modules.balanse.BalanceModuleConf.*;
 
+@Slf4j
 @Service
 public class BalanceService {
+
+    private final InvestApiCore apiCore;
+
+    // --- ДОБАВЛЯЕМ КОНСТРУКТОР ДЛЯ SPRING ---
+    public BalanceService(InvestApiCore apiCore) {
+        this.apiCore = apiCore;
+    }
 
     public AnalysisResult analyzePortfolio(Portfolio portfolio, List<InstrumentObj> instrumentObjs) {
         Money totalValue = portfolio.getTotalAmountPortfolio();
@@ -49,7 +59,7 @@ public class BalanceService {
 
         List<SellAction> sellActions = calculateSellActions(analysisResult, totalPortfolioValue);
         BigDecimal totalCashFromSales = sellActions.stream().map(SellAction::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        List<BuyAction> buyActions = calculateBuyActions(analysisResult, totalCashFromSales);
+        List<BuyAction> buyActions = calculateBuyActions(analysisResult, totalCashFromSales, instrumentObjs);
 
         return new RebalancePlan(sellActions, buyActions, totalCashFromSales);
     }
@@ -134,73 +144,109 @@ public class BalanceService {
      */
     private List<SellAction> calculateSellActions(AnalysisResult analysisResult, BigDecimal totalPortfolioValue) {
         List<SellAction> actions = new ArrayList<>();
-
-        // Работаем со списком проблемных инструментов, который вы уже подготовили
         for (InstrumentObj instToSell : analysisResult.concentrationProblems.getConcentrationInstrumentProblems()) {
+            BigDecimal pricePerOneShare = instToSell.getCurrentPrice().getValue();
+            int lotSize = getRealLotSize(instToSell.getTicker());
+            if (pricePerOneShare.signum() <= 0 || lotSize <= 0) continue;
 
-            BigDecimal currentPositionValue = instToSell.getCurrentPrice().getValue().multiply(instToSell.getQuantity());
+            BigDecimal pricePerLot = pricePerOneShare.multiply(BigDecimal.valueOf(lotSize));
+            BigDecimal currentPositionValue = pricePerOneShare.multiply(instToSell.getQuantity());
             BigDecimal currentPercent = getPercentCount(totalPortfolioValue, currentPositionValue);
             BigDecimal limitPercent = SATELLITE_CONCENTRATION_LIMIT.value;
 
             if (currentPercent.compareTo(limitPercent) > 0) {
                 BigDecimal excessPercent = currentPercent.subtract(limitPercent);
-                BigDecimal sellAmount = totalPortfolioValue.multiply(excessPercent).divide(BigDecimal.valueOf(100), 0, RoundingMode.DOWN);
+                BigDecimal idealSellAmount = totalPortfolioValue.multiply(excessPercent).divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP);
+                int lotsToSell = idealSellAmount.divide(pricePerLot, 0, RoundingMode.CEILING).intValue();
+                int actualLotsOwned = instToSell.getQuantity().intValue() / lotSize;
+                int finalLotsToSell = Math.min(lotsToSell, actualLotsOwned);
+                if (finalLotsToSell == 0 && idealSellAmount.signum() > 0) finalLotsToSell = 1;
 
-                if (sellAmount.signum() > 0) {
-                    actions.add(new SellAction(instToSell.getTicker(), instToSell.getName(), sellAmount, "Снижение риска концентрации"));
+                if (finalLotsToSell > 0) {
+                    BigDecimal realSellAmount = pricePerLot.multiply(BigDecimal.valueOf(finalLotsToSell));
+                    actions.add(new SellAction(instToSell.getTicker(), instToSell.getName(), finalLotsToSell, realSellAmount, "Снижение риска концентрации"));
                 }
             }
         }
         return actions;
     }
 
-    /**
-     * ПРИВАТНЫЙ МЕТОД №2: Отвечает ТОЛЬКО за расчет действий по ПОКУПКЕ.
-     */
-    private List<BuyAction> calculateBuyActions(AnalysisResult analysisResult, BigDecimal availableCash) {
+    private List<BuyAction> calculateBuyActions(AnalysisResult analysisResult,
+                                                BigDecimal availableCash,
+                                                List<InstrumentObj> allInstruments) {
         List<BuyAction> actions = new ArrayList<>();
-        // Если продавать ничего не нужно, то и покупать не на что.
-        if (availableCash.signum() == 0) {
-            return actions;
-        }
+        if (availableCash.signum() <= 0) return actions;
 
-        // --- Шаг 2.1: Находим все категории с недобором и считаем ОБЩИЙ дефицит ---
-        Map<BalanceModuleConf, BigDecimal> deficits = new HashMap<>();
-        BigDecimal totalDeficitPercentage = BigDecimal.ZERO;
+        // --- Шаг 1: Находим все категории с недобором (этот код у вас верный) ---
+        Map<BalanceModuleConf, BigDecimal> deficits = findDeficits(analysisResult);
+        BigDecimal totalDeficitPercentage = deficits.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (totalDeficitPercentage.signum() <= 0) return actions;
 
-        for (Map.Entry<BalanceModuleConf, BigDecimal> entry : analysisResult.classDeviations.entrySet()) {
-            BalanceModuleConf target = entry.getKey();
-            BigDecimal currentPercent = entry.getValue();
-
-            if (currentPercent.compareTo(target.value) < 0) {
-                BigDecimal deficit = target.value.subtract(currentPercent);
-                deficits.put(target, deficit);
-                totalDeficitPercentage = totalDeficitPercentage.add(deficit);
-            }
-        }
-
-        // Если нет категорий с недобором, выходим.
-        if (totalDeficitPercentage.signum() == 0) {
-            return actions;
-        }
-
-        // --- Шаг 2.2: Распределяем доступные деньги ПРОПОРЦИОНАЛЬНО дефициту ---
+        // --- Шаг 2: Распределяем бюджет и конвертируем в лоты ---
         for (Map.Entry<BalanceModuleConf, BigDecimal> entry : deficits.entrySet()) {
             BalanceModuleConf target = entry.getKey();
             BigDecimal deficit = entry.getValue();
 
-            // Считаем "вес" этой категории в общем дефиците
             BigDecimal categoryWeight = deficit.divide(totalDeficitPercentage, 4, RoundingMode.HALF_UP);
+            BigDecimal idealBuyAmount = availableCash.multiply(categoryWeight);
 
-            // Вычисляем, какая сумма из нашего "бюджета" пойдет на эту категорию
-            BigDecimal buyAmount = availableCash.multiply(categoryWeight).setScale(0, RoundingMode.DOWN);
+            String tickerToBuy = getTickerForAssetClass(target);
+            if (tickerToBuy.isEmpty()) continue;
 
-            if (buyAmount.signum() > 0) {
-                actions.add(new BuyAction(target, buyAmount, "Пропорциональное восстановление баланса"));
+            // --- УПРОЩЕННАЯ ЛОГИКА: Ищем информацию ТОЛЬКО в текущем портфеле ---
+            Optional<InstrumentObj> instrumentOpt = allInstruments.stream()
+                    .filter(inst -> inst.getTicker().equals(tickerToBuy))
+                    .findFirst();
+
+            // Если мы нашли инструмент в портфеле, у нас есть и цена, и лотность
+            if (instrumentOpt.isPresent()) {
+                InstrumentObj instrumentToBuy = instrumentOpt.get();
+                BigDecimal pricePerOneShare = instrumentToBuy.getCurrentPrice().getValue();
+                int lotSize = getRealLotSize(tickerToBuy); // Используем наш надежный справочник
+
+                if (pricePerOneShare.signum() > 0 && lotSize > 0) {
+                    BigDecimal pricePerLot = pricePerOneShare.multiply(BigDecimal.valueOf(lotSize));
+                    int lotsToBuy = idealBuyAmount.divide(pricePerLot, 0, RoundingMode.FLOOR).intValue();
+
+                    if (lotsToBuy > 0) {
+                        BigDecimal realBuyAmount = pricePerLot.multiply(BigDecimal.valueOf(lotsToBuy));
+                        actions.add(new BuyAction(target, lotsToBuy, realBuyAmount, "Восстановление баланса"));
+                    }
+                }
+            } else {
+                // Если инструмента нет в портфеле, мы ПОКА ЧТО ничего не делаем.
+                // Это самое простое и безопасное решение для прототипа.
+                log.warn("Актив для покупки '{}' не найден в текущем портфеле. Покупка пропущена.", tickerToBuy);
             }
         }
-
         return actions;
+    }
+
+    private Map<BalanceModuleConf, BigDecimal> findDeficits(AnalysisResult analysisResult) {
+        Map<BalanceModuleConf, BigDecimal> deficits = new HashMap<>();
+        for (Map.Entry<BalanceModuleConf, BigDecimal> entry : analysisResult.classDeviations.entrySet()) {
+            BalanceModuleConf target = entry.getKey();
+            BigDecimal currentPercent = entry.getValue();
+            if (currentPercent.compareTo(target.value) < 0) {
+                BigDecimal deficit = target.value.subtract(currentPercent);
+                deficits.put(target, deficit);
+            }
+        }
+        return deficits;
+    }
+
+    private int getRealLotSize(String ticker) {
+        Map<String, Integer> specialLots = Map.of("SBER", 10, "SBERP", 10, "VTBR", 10000, "GAZP", 10);
+        return specialLots.getOrDefault(ticker, 1);
+    }
+
+    private String getTickerForAssetClass(BalanceModuleConf target) {
+        switch (target) {
+            case TARGET_STOCK_CORE_PERCENTAGE: return BalanceModuleConf.getCoreStockTicket();
+            case TARGET_RESERVE_PERCENTAGE: return "TMON@";
+            case TARGET_PROTECTION_PERCENTAGE: return "GLDRUB_TOM";
+            default: return "";
+        }
     }
 
     // Внутренний enum для ключей карты, чтобы избежать "магических строк"

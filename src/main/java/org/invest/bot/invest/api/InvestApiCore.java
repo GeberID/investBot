@@ -13,6 +13,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 import static ru.tinkoff.piapi.contract.v1.GetTechAnalysisRequest.TypeOfPrice.TYPE_OF_PRICE_CLOSE;
 
@@ -89,6 +90,16 @@ public class InvestApiCore {
         }
         instrumentObjs.sort(Comparator.comparing(InstrumentObj::getType).thenComparing(InstrumentObj::getName));
         return instrumentObjs;
+    }
+
+    public Instrument getGlobalInstrument(String figi){
+        try {
+            return api.getInstrumentsService().getInstrumentByFigi(figi).get();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public InstrumentObj getInstrument(Portfolio portfolio, String instrumentTicket){
