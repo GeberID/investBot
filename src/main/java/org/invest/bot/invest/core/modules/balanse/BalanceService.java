@@ -22,28 +22,19 @@ import static org.invest.bot.invest.core.modules.balanse.BalanceModuleConf.*;
 public class BalanceService {
 
     public AnalysisResult analyzePortfolio(Portfolio portfolio, List<InstrumentObj> instrumentObjs) {
-        Map<BalanceModuleConf, BigDecimal> classDeviations = new HashMap<>();
         Money totalValue = portfolio.getTotalAmountPortfolio();
         if (totalValue.getValue().signum() == 0) {
             return new AnalysisResult(new HashMap<>(), new ConcentrationProblem(new ArrayList<>(), new ArrayList<>()));
         }
 
-        // --- ШАГ 1: Получаем ФАКТИЧЕСКОЕ процентное распределение ---
+        // 1. Получаем фактическое процентное распределение
         Map<BalanceModuleConf, BigDecimal> actualDistribution = calculateActualDistribution(portfolio, instrumentObjs);
 
-        // --- ШАГ 2: Находим отклонения, сравнивая факт с целью ---
-        for (Map.Entry<BalanceModuleConf, BigDecimal> entry : actualDistribution.entrySet()) {
-            BalanceModuleConf target = entry.getKey();
-            BigDecimal currentPercentage = entry.getValue();
+        // 2. Находим отклонения по классам
+        Map<BalanceModuleConf, BigDecimal> classDeviations = findClassDeviations(actualDistribution);
 
-            BigDecimal difference = currentPercentage.subtract(target.value).abs();
-            if (difference.compareTo(ALLOCATION_TOLERANCE.value) > 0) {
-                classDeviations.put(target, currentPercentage);
-            }
-        }
-
-        // --- ШАГ 3: Находим отклонения по КОНЦЕНТРАЦИИ ---
-        ConcentrationProblem concentrationProblems = concentrationProblems(totalValue, instrumentObjs);
+        // 3. Находим отклонения по концентрации
+        ConcentrationProblem concentrationProblems = findConcentrationProblems(totalValue, instrumentObjs);
 
         return new AnalysisResult(classDeviations, concentrationProblems);
     }
@@ -53,11 +44,9 @@ public class BalanceService {
      * Создает полный план ребалансировки на основе результатов анализа.
      */
     public RebalancePlan createPlan(Portfolio portfolio, List<InstrumentObj> instrumentObjs) {
-        // 1. Сначала проводим полный анализ, чтобы получить все отклонения
         AnalysisResult analysisResult = analyzePortfolio(portfolio, instrumentObjs);
-
-        // 2. Затем на основе этого анализа строим план
         BigDecimal totalPortfolioValue = portfolio.getTotalAmountPortfolio().getValue();
+
         List<SellAction> sellActions = calculateSellActions(analysisResult, totalPortfolioValue);
         BigDecimal totalCashFromSales = sellActions.stream().map(SellAction::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         List<BuyAction> buyActions = calculateBuyActions(analysisResult, totalCashFromSales);
@@ -71,15 +60,12 @@ public class BalanceService {
      */
     private Map<AssetGroup, BigDecimal> calculateActualGroupValues(List<InstrumentObj> instrumentObjs) {
         Map<AssetGroup, BigDecimal> values = new HashMap<>();
-        // Инициализируем все группы нулями
         for (AssetGroup group : AssetGroup.values()) {
             values.put(group, BigDecimal.ZERO);
         }
 
         for (InstrumentObj inst : instrumentObjs) {
             BigDecimal positionValue = inst.getQuantity().multiply(inst.getCurrentPrice().getValue());
-
-            // Определяем, к какой группе относится инструмент, и добавляем его стоимость
             if (getCoreStockTicket().equals(inst.getTicker())) {
                 values.merge(AssetGroup.STOCKS_CORE, positionValue, BigDecimal::add);
             } else if (getReserveTickets().contains(inst.getTicker())) {
@@ -98,14 +84,8 @@ public class BalanceService {
     public Map<BalanceModuleConf, BigDecimal> calculateActualDistribution(Portfolio portfolio, List<InstrumentObj> instrumentObjs) {
         Map<BalanceModuleConf, BigDecimal> distribution = new HashMap<>();
         Money totalValue = portfolio.getTotalAmountPortfolio();
-        if (totalValue.getValue().signum() == 0) {
-            return distribution;
-        }
-
-        // 1. Получаем абсолютные значения из нашего "единого источника правды"
         Map<AssetGroup, BigDecimal> actualValues = calculateActualGroupValues(instrumentObjs);
 
-        // 2. Превращаем абсолютные значения в проценты и кладем в карту
         distribution.put(TARGET_STOCK_CORE_PERCENTAGE, getPercentCount(totalValue, actualValues.get(AssetGroup.STOCKS_CORE)));
         distribution.put(TARGET_STOCK_SATELLITE__PERCENTAGE, getPercentCount(totalValue, actualValues.get(AssetGroup.STOCKS_SATELLITE)));
         distribution.put(TARGET_BOND_PERCENTAGE, getPercentCount(totalValue, actualValues.get(AssetGroup.BONDS)));
@@ -115,7 +95,7 @@ public class BalanceService {
         return distribution;
     }
 
-    private ConcentrationProblem concentrationProblems(Money totalValue, List<InstrumentObj> instrumentObjs) {
+    private ConcentrationProblem findConcentrationProblems(Money totalValue, List<InstrumentObj> instrumentObjs) {
         List<String> concentrationHumanProblems = new ArrayList<>();
         List<InstrumentObj> concentrationInstrumentProblems = new ArrayList<>();
         for (InstrumentObj inst : instrumentObjs.stream()
@@ -134,40 +114,19 @@ public class BalanceService {
         return new ConcentrationProblem(concentrationHumanProblems,concentrationInstrumentProblems);
     }
 
-    private Map<String, BigDecimal> setBondsCoreReserveProtectionValues(List<InstrumentObj> instrumentObjs) {
-        Map<String, BigDecimal> values = new HashMap<>();
-        values.put("coreStockValue", BigDecimal.ZERO);
-        values.put("reserveValue", BigDecimal.ZERO);
-        values.put("protectionValue", BigDecimal.ZERO);
-        values.put("satelliteStockValue", BigDecimal.ZERO);
-        values.put("bondValue", BigDecimal.ZERO);
-        for (InstrumentObj inst : instrumentObjs) {
-            BigDecimal positionValue = inst.getQuantity().multiply(inst.getCurrentPrice().getValue());
-            if (getCoreStockTicket().equals(inst.getTicker())) {
-                values.replace("coreStockValue", values.get("coreStockValue").add(positionValue));
-            } else if (getReserveTickets().contains(inst.getTicker())) {
-                values.replace("reserveValue", values.get("reserveValue").add(positionValue));
-            } else if (getProtectionTickets().contains(inst.getTicker())) {
-                values.replace("protectionValue", values.get("protectionValue").add(positionValue));
-            } else if ("share".equals(inst.getType())) {
-                values.replace("satelliteStockValue", values.get("satelliteStockValue").add(positionValue));
-            } else if ("bond".equals(inst.getType())) {
-                values.replace("bondValue", values.get("bondValue").add(positionValue));
+    private Map<BalanceModuleConf, BigDecimal> findClassDeviations(Map<BalanceModuleConf, BigDecimal> actualDistribution) {
+        Map<BalanceModuleConf, BigDecimal> deviations = new HashMap<>();
+        for (Map.Entry<BalanceModuleConf, BigDecimal> entry : actualDistribution.entrySet()) {
+            BalanceModuleConf target = entry.getKey();
+            if (target.isClassTarget()) {
+                BigDecimal currentPercentage = entry.getValue();
+                BigDecimal difference = currentPercentage.subtract(target.value).abs();
+                if (difference.compareTo(ALLOCATION_TOLERANCE.value) > 0) {
+                    deviations.put(target, currentPercentage);
+                }
             }
         }
-        return values;
-    }
-
-    private void checkAndAddDeviation(Map<BalanceModuleConf, BigDecimal> deviations,
-                                      BalanceModuleConf target,
-                                      BigDecimal currentValue,
-                                      Money totalValue) {
-
-        BigDecimal currentPercentage = getPercentCount(totalValue, currentValue);
-        BigDecimal difference = currentPercentage.subtract(target.value).abs();
-        if (difference.compareTo(ALLOCATION_TOLERANCE.value) > 0) {
-            deviations.put(target, currentPercentage);
-        }
+        return deviations;
     }
 
     /**
