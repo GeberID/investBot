@@ -68,4 +68,12 @@ public class InstrumentObj {
     public String getInstrumentUid() {
         return instrumentUid;
     }
+
+    public Boolean getGetBuyAvailableFlag() {
+        return getBuyAvailableFlag;
+    }
+
+    public int getLot() {
+        return lot;
+    }
 }

@@ -1,5 +1,6 @@
 package org.invest.bot.invest.api;
 
+import lombok.extern.slf4j.Slf4j;
 import org.invest.bot.invest.core.modules.instruments.IndicatorType;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Component;
@@ -13,10 +14,13 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static ru.tinkoff.piapi.contract.v1.GetTechAnalysisRequest.TypeOfPrice.TYPE_OF_PRICE_CLOSE;
 
 @Component
+@Slf4j
 public class InvestApiCore {
     private final InvestApi api;
 
@@ -41,6 +45,21 @@ public class InvestApiCore {
 
     public Instrument getInstrumentGlobal(String figi){
         return api.getInstrumentsService().getInstrumentByFigiSync(figi);
+    }
+
+    /**
+     * Получает последнюю актуальную цену для списка FIGI.
+     * @return Map, где ключ - FIGI, значение - цена Quotation.
+     */
+    public Map<String, Quotation> getLastPrices(List<String> figis) {
+        if (figis == null || figis.isEmpty()) return Map.of();
+        try {
+            return api.getMarketDataService().getLastPricesSync(figis).stream()
+                    .collect(Collectors.toMap(LastPrice::getFigi, LastPrice::getPrice));
+        } catch (Exception e) {
+            log.error("Не удалось получить последние цены: {}", e.getMessage());
+            return Map.of();
+        }
     }
 
     public List<Dividend> getDividends(String instrumentFigi){
