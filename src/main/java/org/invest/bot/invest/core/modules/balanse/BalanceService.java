@@ -1,11 +1,9 @@
 package org.invest.bot.invest.core.modules.balanse;
 
-import org.invest.bot.invest.api.InvestApiCore;
 import org.invest.bot.invest.core.modules.balanse.actions.BuyAction;
 import org.invest.bot.invest.core.modules.balanse.actions.SellAction;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Service;
-import ru.tinkoff.piapi.contract.v1.Quotation;
 import ru.tinkoff.piapi.core.models.Money;
 import ru.tinkoff.piapi.core.models.Portfolio;
 
@@ -18,16 +16,11 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.invest.bot.core.DataConvertUtility.getPercentCount;
+import static org.invest.bot.core.DataConvertUtility.quotationToBigDecimal;
 import static org.invest.bot.invest.core.modules.balanse.BalanceModuleConf.*;
 
 @Service
 public class BalanceService {
-
-    private final InvestApiCore apiCore;
-
-    public BalanceService(InvestApiCore apiCore) {
-        this.apiCore = apiCore;
-    }
 
     public AnalysisResult analyzePortfolio(Portfolio portfolio, List<InstrumentObj> instrumentObjs) {
         Map<BalanceModuleConf, BigDecimal> classDeviations = new HashMap<>();
@@ -143,13 +136,44 @@ public class BalanceService {
 
         // Работаем со списком проблемных инструментов, который вы уже подготовили
         for (InstrumentObj instToSell : analysisResult.concentrationProblems.getConcentrationInstrumentProblems()) {
-            BigDecimal targetPositionPercent = totalPortfolioValue.multiply(SATELLITE_CONCENTRATION_LIMIT.value).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-            BigDecimal currentPrice =  instToSell.getQuantity().multiply(instToSell.getCurrentPrice().getValue());
-            int targetLots = targetPositionPercent.divide(currentPrice, 0, RoundingMode.FLOOR).intValue();
-            int sellLots = instToSell.getLot() - targetLots;
-            if (sellLots > 0) {
-                BigDecimal sellAmount = currentPrice.multiply(new BigDecimal(sellLots));
-                actions.add(new SellAction(instToSell.getTicker(), instToSell.getName(), sellLots, sellAmount, "Снижение риска концентрации"));
+            BigDecimal pricePerShare = instToSell.getCurrentPrice().getValue();
+            int sharesPerLot = instToSell.getLot(); // Правильная лотность из WhiteListOfShares
+            int totalSharesInPortfolio = instToSell.getQuantity().intValue(); // Всего ШТУК акций в портфеле
+
+            if (pricePerShare.signum() == 0 || sharesPerLot == 0) {
+                continue;
+            }
+
+            // --- ШАГ 0.5: ВЫЧИСЛЯЕМ ПРАВИЛЬНОЕ КОЛИЧЕСТВО ЛОТОВ В ПОРТФЕЛЕ ---
+            // ЭТО ГЛАВНОЕ ИСПРАВЛЕНИЕ!
+            int currentLotsInPortfolio = totalSharesInPortfolio / sharesPerLot;
+
+            // --- Шаг 1: Определяем "потолок" стоимости позиции в рублях ---
+            BigDecimal targetValueInRub = totalPortfolioValue
+                    .multiply(SATELLITE_CONCENTRATION_LIMIT.value)
+                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+
+            // --- Шаг 2: Вычисляем реальную цену одного лота ---
+            BigDecimal pricePerLot = pricePerShare.multiply(BigDecimal.valueOf(sharesPerLot));
+
+            // --- Шаг 3: Рассчитываем, сколько лотов мы можем себе позволить оставить ---
+            int targetLots = targetValueInRub.divide(pricePerLot, 0, RoundingMode.FLOOR).intValue();
+
+            // --- Шаг 4: Главная формула: сколько лотов нужно продать ---
+            // Теперь здесь будут правильные цифры: 1 - 0 = 1
+            int lotsToSell = currentLotsInPortfolio - targetLots;
+
+            // --- Шаг 5: Если нужно что-то продать, создаем SellAction ---
+            if (lotsToSell > 0) {
+                BigDecimal sellAmount = pricePerLot.multiply(new BigDecimal(lotsToSell));
+
+                actions.add(new SellAction(
+                        instToSell.getTicker(),
+                        instToSell.getName(),
+                        lotsToSell,
+                        sellAmount,
+                        "Снижение риска концентрации"
+                ));
             }
         }
         return actions;
@@ -206,6 +230,6 @@ public class BalanceService {
 
     // Внутренний enum для ключей карты, чтобы избежать "магических строк"
     private enum AssetGroup {
-        STOCKS_CORE, STOCKS_SATELLITE, BONDS, PROTECTION, RESERVE;
+        STOCKS_CORE, STOCKS_SATELLITE, BONDS, PROTECTION, RESERVE
     }
 }

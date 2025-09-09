@@ -2,6 +2,7 @@ package org.invest.bot.invest.api;
 
 import lombok.extern.slf4j.Slf4j;
 import org.invest.bot.invest.core.modules.instruments.IndicatorType;
+import org.invest.bot.invest.core.modules.instruments.WhiteListOfShares;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Component;
 import ru.tinkoff.piapi.contract.v1.*;
@@ -99,8 +100,15 @@ public class InvestApiCore {
         List<InstrumentObj> instrumentObjs = new ArrayList<>();
         for (Position position : portfolio.getPositions()) {
             try {
-                instrumentObjs.add(new InstrumentObj(position,
-                        api.getInstrumentsService().getInstrumentByFigiSync(position.getFigi())));
+                if(position.getInstrumentType().equals("share")){
+                    instrumentObjs.add(new InstrumentObj(position,
+                            api.getInstrumentsService().getInstrumentByFigiSync(position.getFigi()),
+                            WhiteListOfShares.getCorrectLot(position.getFigi())));
+                }else {
+                    instrumentObjs.add(new InstrumentObj(position,
+                            api.getInstrumentsService().getInstrumentByFigiSync(position.getFigi()),1));
+                }
+
             } catch (Exception e) {
                 System.err.println("Could not retrieve instrument details for FIGI: " + position.getFigi() +
                         ". Error: " + e.getMessage());

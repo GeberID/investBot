@@ -19,7 +19,7 @@ public class InstrumentObj {
     private final Boolean getBuyAvailableFlag;
     private final int lot;
 
-    public InstrumentObj(Position position, Instrument instrument) {
+    public InstrumentObj(Position position, Instrument instrument, int lot) {
         this.name = instrument.getName();
         this.instrumentUid = instrument.getUid();
         this.quantity = position.getQuantity();
@@ -30,7 +30,7 @@ public class InstrumentObj {
         this.averageBuyPrice = position.getAveragePositionPrice();
         this.figi = position.getFigi();
         this.getBuyAvailableFlag = instrument.getBuyAvailableFlag();
-        this.lot = instrument.getLot();
+        this.lot = lot;
     }
 
     public String getName() {

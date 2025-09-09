@@ -128,7 +128,7 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
     public void analyzeCommand() {
         if (!checkChatId()) return;
         log.info("Запуск анализа по ручной команде для chatId {}", userChatId);
-        performAnalysisAndNotify(false);
+        performAnalysisAndNotify(true);
     }
 
     public void exportForAi() {

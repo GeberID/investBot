@@ -28,13 +28,10 @@ import static org.invest.bot.core.DataConvertUtility.quotationToBigDecimal;
 @Service
 public class AiReportService {
 
-    private InvestApiCore apiCore;
     private final BalanceService balanceService;
     private final ObjectMapper objectMapper;
-    private final Map<String, InstrumentObj> instrumentCache = new HashMap<>();
 
     public AiReportService(InvestApiCore apiCore, BalanceService balanceService) {
-        this.apiCore = apiCore;
         this.balanceService = balanceService;
         this.objectMapper = new ObjectMapper();
     }
