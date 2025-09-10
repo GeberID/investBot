@@ -48,7 +48,6 @@ public class InstrumentAnalysisService {
             GetTechAnalysisResponse.TechAnalysisItem macd = apiCore.getTechAnalysis(instrumentObj, MACD_WEEKLY).getTechnicalIndicators(0);
             macdLine = quotationToBigDecimal(macd.getMacd());
             signalLine = quotationToBigDecimal(macd.getSignal());
-            // 3. Получаем дивиденды
             dividends = apiCore.getDividends(instrumentObj.getFigi());
         }
         return messageFormatter.reportInstrument(ticker,portfolio, instrumentObj, portfolioPosition,sma50,sma200, weeklyRsi,

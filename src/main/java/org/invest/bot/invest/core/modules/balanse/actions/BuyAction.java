@@ -1,8 +1,8 @@
 package org.invest.bot.invest.core.modules.balanse.actions;
 
-import org.invest.bot.invest.core.modules.balanse.BalanceModuleConf;
+import org.invest.bot.invest.core.modules.balanse.PortfolioInstrumentStructure;
 
 import java.math.BigDecimal;
 
-public record BuyAction(BalanceModuleConf assetClass, BigDecimal amount, String reason) {}
+public record BuyAction(PortfolioInstrumentStructure assetClass, BigDecimal amount, String reason) {}
 

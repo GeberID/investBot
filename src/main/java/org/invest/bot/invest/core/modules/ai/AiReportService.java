@@ -5,13 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.invest.bot.invest.api.InvestApiCore;
-import org.invest.bot.invest.core.modules.balanse.BalanceModuleConf;
+import org.invest.bot.invest.core.modules.balanse.PortfolioInstrumentStructure;
 import org.invest.bot.invest.core.modules.balanse.BalanceService;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Service;
 import ru.tinkoff.piapi.contract.v1.Account;
-import ru.tinkoff.piapi.contract.v1.Instrument;
-import ru.tinkoff.piapi.contract.v1.MoneyValue;
 import ru.tinkoff.piapi.contract.v1.Operation;
 import ru.tinkoff.piapi.core.models.Portfolio;
 
@@ -55,13 +53,10 @@ public class AiReportService {
         ArrayNode logNode = root.putArray("transaction_log");
         for (Operation op : operations) {
             ObjectNode opNode = logNode.addObject();
-            //Instrument instrumentGlobal = apiCore.getInstrumentGlobal(op.getFigi());
             opNode.put("date", Date.from(Instant.ofEpochSecond(op.getDate().getSeconds())).toString());
             opNode.put("type", op.getType());
             opNode.put("instruments type", op.getInstrumentType());
             opNode.put("figi", op.getFigi());
-            //opNode.put("ticker", instrumentGlobal.getTicker());
-            //opNode.put("name", instrumentGlobal.getName());
             if(!op.getOperationType().equals("OPERATION_TYPE_COUPON")){
                 opNode.put("quantity", op.getQuantity());
             }else {
@@ -82,7 +77,6 @@ public class AiReportService {
         }
     }
 
-
     private void addAccountInfo(ObjectNode root, Account account) {
         ObjectNode info = root.putObject("account_info");
         info.put("account_id", account.getId());
@@ -98,9 +92,9 @@ public class AiReportService {
     }
 
     private void addStrategicAllocation(ObjectNode root, Portfolio portfolio, List<InstrumentObj> instruments) {
-        Map<BalanceModuleConf, BigDecimal> distribution = balanceService.calculateActualDistribution(portfolio, instruments);
+        Map<PortfolioInstrumentStructure, BigDecimal> distribution = balanceService.calculateActualDistribution(portfolio.getTotalAmountPortfolio(), instruments);
         ObjectNode allocation = root.putObject("strategic_allocation_actual");
-        for (Map.Entry<BalanceModuleConf, BigDecimal> entry : distribution.entrySet()) {
+        for (Map.Entry<PortfolioInstrumentStructure, BigDecimal> entry : distribution.entrySet()) {
             String key = entry.getKey().name()
                     .toLowerCase()
                     .replace("target_", "")

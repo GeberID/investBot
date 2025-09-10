@@ -125,6 +125,7 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
             executeMethod(PrepareMessage.createMessage(userChatId, messageText, keyboard));
         }
     }
+
     public void analyzeCommand() {
         if (!checkChatId()) return;
         log.info("Запуск анализа по ручной команде для chatId {}", userChatId);
@@ -182,7 +183,7 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
             executeMethod(PrepareMessage.createMessage(userChatId, messageText));
             this.lastSentDeviations = currentResult;
 
-            executeMethod(PrepareMessage.createMessage(userChatId, messageFormatter.formatRebalancePlan(balanceService.createPlan(portfolio,instrumentObjs))));
+            executeMethod(PrepareMessage.createMessage(userChatId, messageFormatter.formatRebalancePlan(balanceService.createRebalancePlan(currentResult, portfolio))));
         } catch (Exception e) {
             log.error("Ошибка во время анализа для chatId {}: {}", userChatId, e.getMessage());
         }

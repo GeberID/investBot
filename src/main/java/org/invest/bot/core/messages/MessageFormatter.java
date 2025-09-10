@@ -1,7 +1,7 @@
 package org.invest.bot.core.messages;
 
 import org.invest.bot.invest.core.modules.balanse.AnalysisResult;
-import org.invest.bot.invest.core.modules.balanse.BalanceModuleConf;
+import org.invest.bot.invest.core.modules.balanse.PortfolioInstrumentStructure;
 import org.invest.bot.invest.core.modules.balanse.RebalancePlan;
 import org.invest.bot.invest.core.modules.balanse.actions.BuyAction;
 import org.invest.bot.invest.core.modules.balanse.actions.SellAction;
@@ -142,8 +142,8 @@ public class MessageFormatter {
         }
         StringBuilder sb = new StringBuilder();
         sb.append("️️️️️️️️️️️️️️️<b>Cтратегический анализ портфеля</b>\n\nОбнаружены следующие отклонения:\n");
-        for (Map.Entry<BalanceModuleConf, BigDecimal> entry : result.classDeviations.entrySet()) {
-            BalanceModuleConf target = entry.getKey();
+        for (Map.Entry<PortfolioInstrumentStructure, BigDecimal> entry : result.classDeviations.entrySet()) {
+            PortfolioInstrumentStructure target = entry.getKey();
             BigDecimal fact = entry.getValue();
             sb.append("\n• ").append(formatDeviationLine(target, fact));
         }
@@ -306,7 +306,7 @@ public class MessageFormatter {
     /**
      * Форматирует одну строку для отчета об отклонениях.
      */
-    private String formatDeviationLine(BalanceModuleConf target, BigDecimal fact) {
+    private String formatDeviationLine(PortfolioInstrumentStructure target, BigDecimal fact) {
         String name = getFriendlyNameForTarget(target);
         String direction = fact.compareTo(target.value) > 0 ? "превышает" : "ниже";
 
@@ -319,17 +319,17 @@ public class MessageFormatter {
     /**
      * Возвращает человекочитаемое имя для целевого показателя.
      */
-    private String getFriendlyNameForTarget(BalanceModuleConf target) {
+    private String getFriendlyNameForTarget(PortfolioInstrumentStructure target) {
         switch (target) {
-            case TARGET_STOCK_CORE_PERCENTAGE:
+            case TARGET_STOCK_CORE:
                 return "Акции (Ядро)";
-            case TARGET_STOCK_SATELLITE__PERCENTAGE:
+            case TARGET_STOCK_SATELLITE:
                 return "Акции (Спутники)";
-            case TARGET_BOND_PERCENTAGE:
+            case TARGET_BOND:
                 return "Облигации";
-            case TARGET_PROTECTION_PERCENTAGE:
+            case TARGET_PROTECTION:
                 return "Защита";
-            case TARGET_RESERVE_PERCENTAGE:
+            case TARGET_RESERVE:
                 return "Резерв";
             default:
                 return "Неизвестная категория";
@@ -479,13 +479,13 @@ public class MessageFormatter {
     /**
      * Приватный хелпер для получения "красивых" имен классов активов.
      */
-    private String getFriendlyClassName(BalanceModuleConf target) {
+    private String getFriendlyClassName(PortfolioInstrumentStructure target) {
         switch (target) {
-            case TARGET_STOCK_CORE_PERCENTAGE: return "Акции (Ядро)";
-            case TARGET_STOCK_SATELLITE__PERCENTAGE: return "Акции (Спутники)";
-            case TARGET_BOND_PERCENTAGE: return "Облигации";
-            case TARGET_PROTECTION_PERCENTAGE: return "Защита";
-            case TARGET_RESERVE_PERCENTAGE: return "Резерв";
+            case TARGET_STOCK_CORE: return "Акции (Ядро)";
+            case TARGET_STOCK_SATELLITE: return "Акции (Спутники)";
+            case TARGET_BOND: return "Облигации";
+            case TARGET_PROTECTION: return "Защита";
+            case TARGET_RESERVE: return "Резерв";
             default: return "Категория";
         }
     }

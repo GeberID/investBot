@@ -44,25 +44,6 @@ public class InvestApiCore {
                 .orElse(null);
     }
 
-    public Instrument getInstrumentGlobal(String figi){
-        return api.getInstrumentsService().getInstrumentByFigiSync(figi);
-    }
-
-    /**
-     * Получает последнюю актуальную цену для списка FIGI.
-     * @return Map, где ключ - FIGI, значение - цена Quotation.
-     */
-    public Map<String, Quotation> getLastPrices(List<String> figis) {
-        if (figis == null || figis.isEmpty()) return Map.of();
-        try {
-            return api.getMarketDataService().getLastPricesSync(figis).stream()
-                    .collect(Collectors.toMap(LastPrice::getFigi, LastPrice::getPrice));
-        } catch (Exception e) {
-            log.error("Не удалось получить последние цены: {}", e.getMessage());
-            return Map.of();
-        }
-    }
-
     public List<Dividend> getDividends(String instrumentFigi){
         Instant now = Instant.now();
         Instant yearAhead = now.plus(365, ChronoUnit.DAYS);
@@ -72,7 +53,6 @@ public class InvestApiCore {
         }
         return dividends;
     }
-
 
     public GetTechAnalysisResponse getTechAnalysis(
             InstrumentObj instrument,

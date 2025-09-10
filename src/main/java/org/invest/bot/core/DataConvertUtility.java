@@ -37,7 +37,6 @@ public final class DataConvertUtility {
                 .add(BigDecimal.valueOf(quotation.getNano(), 9));
     }
 
-
     public static String convertTimeStampToStringWithoutYearSymbol(Timestamp dateTime) {
         Instant instant = Instant.ofEpochSecond(dateTime.getSeconds(), dateTime.getNanos());
         SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
