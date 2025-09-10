@@ -131,8 +131,7 @@ public class BalanceService {
                 continue;
             }
 
-            // --- ШАГ 0.5: ВЫЧИСЛЯЕМ ПРАВИЛЬНОЕ КОЛИЧЕСТВО ЛОТОВ В ПОРТФЕЛЕ ---
-            // ЭТО ГЛАВНОЕ ИСПРАВЛЕНИЕ!
+            // --- ВЫЧИСЛЯЕМ ПРАВИЛЬНОЕ КОЛИЧЕСТВО ЛОТОВ В ПОРТФЕЛЕ ---
             int currentLotsInPortfolio = totalSharesInPortfolio / sharesPerLot;
 
             // --- Шаг 1: Определяем "потолок" стоимости позиции в рублях ---
@@ -153,7 +152,6 @@ public class BalanceService {
             // --- Шаг 5: Если нужно что-то продать, создаем SellAction ---
             if (lotsToSell > 0) {
                 BigDecimal sellAmount = pricePerLot.multiply(new BigDecimal(lotsToSell));
-
                 actions.add(new SellAction(
                         instToSell.getTicker(),
                         instToSell.getFigi(),
@@ -177,7 +175,7 @@ public class BalanceService {
             return actions;
         }
 
-        // --- Шаг 2.1: Находим все категории с недобором и считаем ОБЩИЙ дефицит ---
+        // ШАГ 1: Найти "дыры" в портфеле (дефицитные категории)
         Map<PortfolioInstrumentStructure, BigDecimal> deficits = new HashMap<>();
         BigDecimal totalDeficitPercentage = BigDecimal.ZERO;
 
