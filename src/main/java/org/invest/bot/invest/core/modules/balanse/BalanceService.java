@@ -10,107 +10,42 @@ import ru.tinkoff.piapi.core.models.Portfolio;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Objects;
 
-import static org.invest.bot.core.DataConvertUtility.getPercentCount;
 import static org.invest.bot.invest.core.modules.balanse.PortfolioInstrumentStructure.*;
 
 @Service
 public class BalanceService {
-    
-    public RebalancePlan createRebalancePlan(AnalysisResult analysisResult, Portfolio portfolio) {
-        List<SellAction> sellActions = calculateSellActions(analysisResult, portfolio.getTotalAmountPortfolio().getValue());
+
+    public RebalancePlan createRebalancePlan(ConcentrationProblem concentrationProblem, Portfolio portfolio) {
+        List<SellAction> sellActions = calculateSellActions(concentrationProblem, portfolio.getTotalAmountPortfolio().getValue());
         BigDecimal totalCashFromSales = sellActions.stream().map(SellAction::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        List<BuyAction> buyActions = calculateBuyActions(analysisResult, portfolio.getTotalAmountPortfolio().getValue());
+        List<BuyAction> buyActions = calculateBuyActions(concentrationProblem, portfolio.getTotalAmountPortfolio().getValue());
         return new RebalancePlan(sellActions, buyActions, totalCashFromSales);
     }
 
-    public AnalysisResult analyzePortfolio(Portfolio portfolio, List<InstrumentObj> instrumentObjs) {
+    public ConcentrationProblem analyzePortfolio(Portfolio portfolio, List<InstrumentObj> instrumentObjs) {
         Money totalValue = portfolio.getTotalAmountPortfolio();
         if (totalValue.getValue().signum() == 0) {
-            return new AnalysisResult(new HashMap<>(), new ConcentrationProblem(new ArrayList<>(), new ArrayList<>()));
+            return new ConcentrationProblem(new ArrayList<>(), new ArrayList<>());
         }
-        Map<PortfolioInstrumentStructure, BigDecimal> classDeviations = getClassDeviations(totalValue,instrumentObjs);
-        ConcentrationProblem concentrationProblems = concentrationProblems(totalValue, instrumentObjs);
-        return new AnalysisResult(classDeviations, concentrationProblems);
-    }
-
-    public Map<PortfolioInstrumentStructure, BigDecimal> calculateActualDistribution(Money totalValue, List<InstrumentObj> instrumentObjs) {
-        Map<PortfolioInstrumentStructure, BigDecimal> distribution = new HashMap<>();
-
-        // 1. Получаем абсолютные значения из нашего "единого источника правды"
-        Map<PortfolioInstrumentStructure, BigDecimal> actualValues = calculateActualGroupValues(instrumentObjs);
-
-        // 2. Превращаем абсолютные значения в проценты и кладем в карту
-        distribution.put(TARGET_STOCK_CORE, getPercentCount(totalValue, actualValues.get(PortfolioInstrumentStructure.TARGET_STOCK_CORE)));
-        distribution.put(TARGET_STOCK_SATELLITE, getPercentCount(totalValue, actualValues.get(PortfolioInstrumentStructure.TARGET_STOCK_SATELLITE)));
-        distribution.put(TARGET_BOND, getPercentCount(totalValue, actualValues.get(PortfolioInstrumentStructure.TARGET_BOND)));
-        distribution.put(TARGET_PROTECTION, getPercentCount(totalValue, actualValues.get(PortfolioInstrumentStructure.TARGET_PROTECTION)));
-        distribution.put(TARGET_RESERVE, getPercentCount(totalValue, actualValues.get(PortfolioInstrumentStructure.TARGET_RESERVE)));
-
-        return distribution;
-    }
-
-    private Map<PortfolioInstrumentStructure, BigDecimal> calculateActualGroupValues(List<InstrumentObj> instrumentObjs) {
-        Map<PortfolioInstrumentStructure, BigDecimal> values = new HashMap<>();
-        // Инициализируем все группы нулями
-        for (PortfolioInstrumentStructure group : PortfolioInstrumentStructure.values()) {
-            values.put(group, BigDecimal.ZERO);
-        }
-        for (InstrumentObj inst : instrumentObjs) {
-            BigDecimal positionValue = inst.getQuantity().multiply(inst.getCurrentPrice().getValue());
-            // Определяем, к какой группе относится инструмент, и добавляем его стоимость
-            if (getCoreStockTicket().equals(inst.getTicker())) {
-                values.merge(PortfolioInstrumentStructure.TARGET_STOCK_CORE, positionValue, BigDecimal::add);
-            } else if (getReserveTickets().contains(inst.getTicker())) {
-                values.merge(PortfolioInstrumentStructure.TARGET_RESERVE, positionValue, BigDecimal::add);
-            } else if (getProtectionTickets().contains(inst.getTicker())) {
-                values.merge(PortfolioInstrumentStructure.TARGET_PROTECTION, positionValue, BigDecimal::add);
-            } else if ("share".equals(inst.getType())) {
-                values.merge(PortfolioInstrumentStructure.TARGET_STOCK_SATELLITE, positionValue, BigDecimal::add);
-            } else if ("bond".equals(inst.getType())) {
-                values.merge(PortfolioInstrumentStructure.TARGET_BOND, positionValue, BigDecimal::add);
-            }
-        }
-        return values;
-    }
-    
-    private Map<PortfolioInstrumentStructure, BigDecimal> getClassDeviations(Money totalValue, List<InstrumentObj> instrumentObjs){
-        Map<PortfolioInstrumentStructure, BigDecimal> classDeviations = new HashMap<>();
-        // --- ШАГ 1: Получаем ФАКТИЧЕСКОЕ процентное распределение ---
-        Map<PortfolioInstrumentStructure, BigDecimal> actualDistribution = calculateActualDistribution(totalValue, instrumentObjs);
-
-        // --- ШАГ 2: Находим отклонения, сравнивая факт с целью ---
-        for (Map.Entry<PortfolioInstrumentStructure, BigDecimal> entry : actualDistribution.entrySet()) {
-            PortfolioInstrumentStructure target = entry.getKey();
-            BigDecimal currentPercentage = entry.getValue();
-
-            BigDecimal difference = currentPercentage.subtract(target.value).abs();
-            if (difference.compareTo(ALLOCATION_TOLERANCE.value) > 0) {
-                classDeviations.put(target, currentPercentage);
-            }
-        }
-        return classDeviations;
+        return concentrationProblems(totalValue, instrumentObjs);
     }
 
     private ConcentrationProblem concentrationProblems(Money totalValue, List<InstrumentObj> instrumentObjs) {
+        List<ActualDistribution> concentrationInstrumentProblems = ActualDistribution.getAllDistribution(totalValue, instrumentObjs);
         List<String> concentrationHumanProblems = new ArrayList<>();
-        List<InstrumentObj> concentrationInstrumentProblems = new ArrayList<>();
-        for (InstrumentObj inst : instrumentObjs.stream()
-                .filter(filter -> filter.getType().equals("share")).collect(Collectors.toSet())) {
-            BigDecimal positionValue = inst.getQuantity().multiply(inst.getCurrentPrice().getValue());
-            BigDecimal percentage = getPercentCount(totalValue, positionValue);
-            if (percentage.compareTo(SATELLITE_CONCENTRATION_LIMIT.value) > 0) {
+        for (ActualDistribution concentrationInstrumentProblem : concentrationInstrumentProblems) {
+            for (InstrumentObj instrumentObj : concentrationInstrumentProblem.getInstruments().keySet()) {
                 String problem = String.format(
                         "‼️ <b>Риск концентрации:</b> доля '%s' (<b>%s%%</b>) превышает лимит в <b>%s%%</b>!",
-                        inst.getName(), percentage.setScale(2, RoundingMode.HALF_UP), SATELLITE_CONCENTRATION_LIMIT.value
+                        instrumentObj.getName(), concentrationInstrumentProblem.getInstruments().get(instrumentObj).setScale(2, RoundingMode.HALF_UP),
+                        Objects.requireNonNull(getLimitByTarget(concentrationInstrumentProblem.getInstrumentStructure())).value
                 );
                 concentrationHumanProblems.add(problem);
-                concentrationInstrumentProblems.add(inst);
             }
+
         }
         return new ConcentrationProblem(concentrationHumanProblems, concentrationInstrumentProblems);
     }
@@ -118,11 +53,14 @@ public class BalanceService {
     /**
      * ПРИВАТНЫЙ МЕТОД №1: Отвечает ТОЛЬКО за расчет действий по ПРОДАЖЕ.
      */
-    private List<SellAction> calculateSellActions(AnalysisResult analysisResult, BigDecimal totalPortfolioValue) {
+    private List<SellAction> calculateSellActions(ConcentrationProblem concentrationProblem, BigDecimal totalPortfolioValue) {
         List<SellAction> actions = new ArrayList<>();
-
+        List<ActualDistribution> actualDistributions = concentrationProblem.getConcentrationInstrumentProblems()
+                .stream().filter(filter -> filter.getInstrumentStructure().equals(TARGET_STOCK_SATELLITE))
+                .toList();
         // Работаем со списком проблемных инструментов, который вы уже подготовили
-        for (InstrumentObj instToSell : analysisResult.concentrationProblems.getConcentrationInstrumentProblems()) {
+
+        for (InstrumentObj instToSell : actualDistributions.stream().findFirst().get().getInstruments().keySet()) {
             BigDecimal pricePerShare = instToSell.getCurrentPrice().getValue();
             int sharesPerLot = instToSell.getLot(); // Правильная лотность из WhiteListOfShares
             int totalSharesInPortfolio = instToSell.getQuantity().intValue(); // Всего ШТУК акций в портфеле
@@ -168,7 +106,10 @@ public class BalanceService {
     /**
      * ПРИВАТНЫЙ МЕТОД №2: Отвечает ТОЛЬКО за расчет действий по ПОКУПКЕ.
      */
-    private List<BuyAction> calculateBuyActions(AnalysisResult analysisResult, BigDecimal availableCash) {
+    private List<BuyAction> calculateBuyActions(ConcentrationProblem concentrationProblem, BigDecimal availableCash) {
+        return new ArrayList<>();
+    }
+   /* private List<BuyAction> calculateBuyActions(ConcentrationProblem concentrationProblem, BigDecimal availableCash) {
         List<BuyAction> actions = new ArrayList<>();
         // Если продавать ничего не нужно, то и покупать не на что.
         if (availableCash.signum() == 0) {
@@ -212,5 +153,5 @@ public class BalanceService {
         }
 
         return actions;
-    }
+    }*/
 }

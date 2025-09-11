@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.invest.bot.invest.api.InvestApiCore;
+import org.invest.bot.invest.core.modules.balanse.ActualDistribution;
 import org.invest.bot.invest.core.modules.balanse.PortfolioInstrumentStructure;
 import org.invest.bot.invest.core.modules.balanse.BalanceService;
 import org.invest.bot.invest.core.objects.InstrumentObj;
@@ -92,14 +93,14 @@ public class AiReportService {
     }
 
     private void addStrategicAllocation(ObjectNode root, Portfolio portfolio, List<InstrumentObj> instruments) {
-        Map<PortfolioInstrumentStructure, BigDecimal> distribution = balanceService.calculateActualDistribution(portfolio.getTotalAmountPortfolio(), instruments);
+        List<ActualDistribution> concentrationInstrumentProblems = ActualDistribution.getAllDistribution(portfolio.getTotalAmountPortfolio(), instruments);
         ObjectNode allocation = root.putObject("strategic_allocation_actual");
-        for (Map.Entry<PortfolioInstrumentStructure, BigDecimal> entry : distribution.entrySet()) {
-            String key = entry.getKey().name()
+        for (ActualDistribution concentrationInstrumentProblem : concentrationInstrumentProblems) {
+            String key = concentrationInstrumentProblem.getInstrumentStructure().name()
                     .toLowerCase()
                     .replace("target_", "")
                     .replace("__", "_");
-            allocation.put(key, entry.getValue());
+            allocation.put(key, concentrationInstrumentProblem.getTotalPresent());
         }
     }
 

@@ -8,8 +8,8 @@ import org.invest.bot.core.messages.PrepareMessage;
 import org.invest.bot.core.messages.enums.Commands;
 import org.invest.bot.invest.api.InvestApiCore;
 import org.invest.bot.invest.core.modules.ai.AiReportService;
-import org.invest.bot.invest.core.modules.balanse.AnalysisResult;
 import org.invest.bot.invest.core.modules.balanse.BalanceService;
+import org.invest.bot.invest.core.modules.balanse.ConcentrationProblem;
 import org.invest.bot.invest.core.modules.instruments.InstrumentAnalysisService;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.jetbrains.annotations.NotNull;
@@ -49,7 +49,7 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
     private final MessageFormatter messageFormatter;
     private final KeyboardFactory keyboardFactory;
     private final BalanceService balanceService;
-    private AnalysisResult lastSentDeviations;
+    private ConcentrationProblem lastSentDeviations;
     private final AiReportService aiReportService;
     private Long userChatId;
     private InvestApiCore apiCore;
@@ -174,7 +174,7 @@ public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThrea
             Portfolio portfolio = apiCore.getPortfolio(account.getId());
             List<InstrumentObj> instrumentObjs = apiCore.getInstruments(portfolio);
 
-            AnalysisResult currentResult = balanceService.analyzePortfolio(portfolio, instrumentObjs);
+            ConcentrationProblem currentResult = balanceService.analyzePortfolio(portfolio, instrumentObjs);
             if (checkChanges && currentResult.equals(lastSentDeviations)) {
                 log.info("Отклонения для chatId {} не изменились. Отправка пропущена.", userChatId);
                 return;

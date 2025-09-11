@@ -2,13 +2,14 @@ package org.invest.bot.invest.core.modules.balanse;
 
 import org.invest.bot.invest.core.objects.InstrumentObj;
 
+import java.util.HashMap;
 import java.util.List;
 
 public class ConcentrationProblem {
     private List<String> concentrationHumanProblems;
-    private List<InstrumentObj> concentrationInstrumentProblems;
+    private List<ActualDistribution> concentrationInstrumentProblems;
 
-    public ConcentrationProblem(List<String> concentrationHumanProblems, List<InstrumentObj> concentrationInstrumentProblems) {
+    public ConcentrationProblem(List<String> concentrationHumanProblems, List<ActualDistribution> concentrationInstrumentProblems) {
         this.concentrationHumanProblems = concentrationHumanProblems;
         this.concentrationInstrumentProblems = concentrationInstrumentProblems;
     }
@@ -17,7 +18,7 @@ public class ConcentrationProblem {
         return concentrationHumanProblems;
     }
 
-    public List<InstrumentObj> getConcentrationInstrumentProblems() {
+    public List<ActualDistribution> getConcentrationInstrumentProblems() {
         return concentrationInstrumentProblems;
     }
 }

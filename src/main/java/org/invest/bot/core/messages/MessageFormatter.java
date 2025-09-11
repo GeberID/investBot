@@ -1,6 +1,7 @@
 package org.invest.bot.core.messages;
 
-import org.invest.bot.invest.core.modules.balanse.AnalysisResult;
+import org.invest.bot.invest.core.modules.balanse.ActualDistribution;
+import org.invest.bot.invest.core.modules.balanse.ConcentrationProblem;
 import org.invest.bot.invest.core.modules.balanse.PortfolioInstrumentStructure;
 import org.invest.bot.invest.core.modules.balanse.RebalancePlan;
 import org.invest.bot.invest.core.modules.balanse.actions.BuyAction;
@@ -47,14 +48,14 @@ public class MessageFormatter {
             sb.append(formatSellBlock(plan.sellActions(), plan.totalCashFromSales()));
 
             // --- Блок Покупки ---
-            if (!plan.buyActions().isEmpty()) {
+            /*if (!plan.buyActions().isEmpty()) {
                 sb.append(formatBuyBlock(plan.buyActions(), plan.totalCashFromSales()));
             } else {
                 // Этот случай возможен, если, например, нужно только продать излишки
                 sb.append("\n<b>Шаг 2: Размещение средств</b>\n");
                 sb.append(String.format("<i>Рекомендуется направить высвобожденные средства (%s ₽) в резерв (TMON).</i>\n",
                         formatAmount(plan.totalCashFromSales())));
-            }
+            }*/
         }
         // --- Сценарий 3: Нужно только покупать (например, после пополнения счета) ---
         else if (!plan.buyActions().isEmpty()) {
@@ -135,19 +136,20 @@ public class MessageFormatter {
      * @param result Карта с отклонениями от BalanceService.
      * @return Готовый к отправке текст сообщения.
      */
-    public String formatBalanceDeviations(AnalysisResult result) {
-        if (!result.hasDeviations()) {
+    public String formatBalanceDeviations(ConcentrationProblem result) {
+        if (result.getConcentrationInstrumentProblems().isEmpty()) {
             return "✅ <b>Стратегический анализ портфеля</b>\n\n" +
                     "Отклонений от вашей стратегии не обнаружено.";
         }
         StringBuilder sb = new StringBuilder();
         sb.append("️️️️️️️️️️️️️️️<b>Cтратегический анализ портфеля</b>\n\nОбнаружены следующие отклонения:\n");
-        for (Map.Entry<PortfolioInstrumentStructure, BigDecimal> entry : result.classDeviations.entrySet()) {
-            PortfolioInstrumentStructure target = entry.getKey();
-            BigDecimal fact = entry.getValue();
+
+        for (ActualDistribution actualDistributionList : result.getConcentrationInstrumentProblems()) {
+            PortfolioInstrumentStructure target = actualDistributionList.getInstrumentStructure();
+            BigDecimal fact = actualDistributionList.getTotalPresent();
             sb.append("\n• ").append(formatDeviationLine(target, fact));
         }
-        for (String problem : result.concentrationProblems.getConcentrationHumanProblems()) {
+        for (String problem : result.getConcentrationHumanProblems()) {
             sb.append("\n• ").append(problem);
         }
         sb.append("\n\n<i>Рекомендуется провести ребалансировку.</i>");
