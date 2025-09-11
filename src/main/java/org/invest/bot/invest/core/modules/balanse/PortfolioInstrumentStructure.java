@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 @AllArgsConstructor
 public enum PortfolioInstrumentStructure {
@@ -20,26 +21,17 @@ public enum PortfolioInstrumentStructure {
 
     public BigDecimal value;
 
-    /** Акции, входящие в "Ядро" (индексные фонды) */
-    public static String getCoreStockTicket() {
-        return "TMOS@"; // FIGI для TMOS
-    }
+    // --- МЕТОДЫ ДЛЯ ПОКУПКИ (Возвращают ОДИН тикер) ---
+    public static Optional<String> getCorePurchaseTicker() { return Optional.of("TMOS@"); }
+    public static Optional<String> getReservePurchaseTicker() { return Optional.of("TMON@"); }
+    public static Optional<String> getProtectionPurchaseTicker() { return Optional.of("GLDRUB_TOM"); }
 
-    /** Инструменты, входящие в "Защиту" */
-    public static Set<String> getProtectionTickets() {
-        return Set.of(
-                "GLDRUB_TOM", // FIGI для TGLD (золото)
-                "USD000UTSTOM"  // FIGI для USD
-        );
-    }
 
-    /** Инструменты, входящие в "Резерв" */
-    public static Set<String> getReserveTickets() {
-        return Set.of(
-                "TMON@", // FIGI для TMON (фонд ден. рынка)
-                "RUB000UTSTOM"  // FIGI для RUB
-        );
-    }
+    // --- МЕТОДЫ ДЛЯ КЛАССИФИКАЦИИ (Возвращают ПОЛНЫЙ список) ---
+    public static String getCoreStockTicket() { return "TMOS@"; }
+    public static Set<String> getProtectionTickets() { return Set.of("GLDRUB_TOM", "USD000UTSTOM"); }
+    public static Set<String> getReserveTickets() { return Set.of("TMON@", "RUB000UTSTOM"); }
+
 
     public static List<PortfolioInstrumentStructure> getInsValues(){
         return List.of(TARGET_STOCK_SATELLITE,TARGET_STOCK_CORE,TARGET_BOND,

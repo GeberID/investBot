@@ -1,22 +1,29 @@
 package org.invest.bot.invest.core.modules.balanse;
 
+import org.invest.bot.invest.api.InvestApiCore;
 import org.invest.bot.invest.core.modules.balanse.actions.BuyAction;
 import org.invest.bot.invest.core.modules.balanse.actions.SellAction;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Service;
+import ru.tinkoff.piapi.contract.v1.Instrument;
+import ru.tinkoff.piapi.contract.v1.Quotation;
 import ru.tinkoff.piapi.core.models.Money;
 import ru.tinkoff.piapi.core.models.Portfolio;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
+import java.util.stream.Collectors;
 
+import static org.invest.bot.core.DataConvertUtility.quotationToBigDecimal;
 import static org.invest.bot.invest.core.modules.balanse.PortfolioInstrumentStructure.*;
 
 @Service
 public class BalanceService {
+    private final InvestApiCore apiCore;
+    public BalanceService(InvestApiCore apiCore) {
+        this.apiCore = apiCore;
+    }
 
     public RebalancePlan createRebalancePlan(ConcentrationProblem concentrationProblem, Portfolio portfolio) {
         List<SellAction> sellActions = calculateSellActions(concentrationProblem, portfolio.getTotalAmountPortfolio().getValue());
@@ -107,22 +114,18 @@ public class BalanceService {
      * ПРИВАТНЫЙ МЕТОД №2: Отвечает ТОЛЬКО за расчет действий по ПОКУПКЕ.
      */
     private List<BuyAction> calculateBuyActions(ConcentrationProblem concentrationProblem, BigDecimal availableCash) {
-        return new ArrayList<>();
-    }
-   /* private List<BuyAction> calculateBuyActions(ConcentrationProblem concentrationProblem, BigDecimal availableCash) {
         List<BuyAction> actions = new ArrayList<>();
-        // Если продавать ничего не нужно, то и покупать не на что.
-        if (availableCash.signum() == 0) {
+        if (availableCash == null || availableCash.signum() <= 0) {
             return actions;
         }
 
-        // ШАГ 1: Найти "дыры" в портфеле (дефицитные категории)
+        // --- Шаг 1: Находим дефицитные категории ---
         Map<PortfolioInstrumentStructure, BigDecimal> deficits = new HashMap<>();
         BigDecimal totalDeficitPercentage = BigDecimal.ZERO;
 
-        for (Map.Entry<PortfolioInstrumentStructure, BigDecimal> entry : analysisResult.classDeviations.entrySet()) {
-            PortfolioInstrumentStructure target = entry.getKey();
-            BigDecimal currentPercent = entry.getValue();
+        for (ActualDistribution distribution : concentrationProblem.getConcentrationInstrumentProblems()) {
+            PortfolioInstrumentStructure target = distribution.getInstrumentStructure();
+            BigDecimal currentPercent = distribution.getTotalPresent();
 
             if (currentPercent.compareTo(target.value) < 0) {
                 BigDecimal deficit = target.value.subtract(currentPercent);
@@ -131,27 +134,63 @@ public class BalanceService {
             }
         }
 
-        // Если нет категорий с недобором, выходим.
         if (totalDeficitPercentage.signum() == 0) {
             return actions;
         }
 
-        // --- Шаг 2.2: Распределяем доступные деньги ПРОПОРЦИОНАЛЬНО дефициту ---
-        for (Map.Entry<PortfolioInstrumentStructure, BigDecimal> entry : deficits.entrySet()) {
-            PortfolioInstrumentStructure target = entry.getKey();
-            BigDecimal deficit = entry.getValue();
+        // --- Шаг 2: Определяем, ЧТО покупать и запрашиваем информацию ---
+        Map<PortfolioInstrumentStructure, String> purchaseTickerMap = new HashMap<>();
+        getCorePurchaseTicker().ifPresent(ticker -> purchaseTickerMap.put(TARGET_STOCK_CORE, ticker));
+        getReservePurchaseTicker().ifPresent(ticker -> purchaseTickerMap.put(TARGET_RESERVE, ticker));
+        getProtectionPurchaseTicker().ifPresent(ticker -> purchaseTickerMap.put(TARGET_PROTECTION, ticker));
 
-            // Считаем "вес" этой категории в общем дефиците
-            BigDecimal categoryWeight = deficit.divide(totalDeficitPercentage, 4, RoundingMode.HALF_UP);
-
-            // Вычисляем, какая сумма из нашего "бюджета" пойдет на эту категорию
-            BigDecimal buyAmount = availableCash.multiply(categoryWeight).setScale(0, RoundingMode.DOWN);
-
-            if (buyAmount.signum() > 0) {
-                actions.add(new BuyAction(target, buyAmount, "Пропорциональное восстановление баланса"));
+        Map<String, Instrument> instrumentDetailsMap = new HashMap<>();
+        for (String ticker : purchaseTickerMap.values()) {
+            Instrument instrument = apiCore.getInstrumentByTicker(ticker); // Используем новый метод
+            if (instrument != null) {
+                instrumentDetailsMap.put(ticker, instrument);
             }
         }
 
+        List<String> figisToFetch = instrumentDetailsMap.values().stream().map(Instrument::getFigi).collect(Collectors.toList());
+        Map<String, Quotation> lastPrices = apiCore.getLastPrices(figisToFetch);
+
+        // --- Шаг 3: Распределяем деньги и конвертируем в лоты ---
+        for (Map.Entry<PortfolioInstrumentStructure, BigDecimal> entry : deficits.entrySet()) {
+            PortfolioInstrumentStructure category = entry.getKey();
+            String tickerToBuy = purchaseTickerMap.get(category);
+            if (tickerToBuy == null) continue;
+
+            Instrument instrumentDetails = instrumentDetailsMap.get(tickerToBuy);
+            if (instrumentDetails == null) continue;
+
+            Quotation lastPriceQuotation = lastPrices.get(instrumentDetails.getFigi());
+            if (lastPriceQuotation == null) continue;
+
+            BigDecimal lastPrice = quotationToBigDecimal(lastPriceQuotation); // Нужен ваш хелпер
+            int lotSize = instrumentDetails.getLot();
+
+            BigDecimal deficit = entry.getValue();
+            BigDecimal categoryWeight = deficit.divide(totalDeficitPercentage, 4, RoundingMode.HALF_UP);
+            BigDecimal moneyForCategory = availableCash.multiply(categoryWeight).setScale(2, RoundingMode.DOWN);
+
+            BigDecimal pricePerLot = lastPrice.multiply(BigDecimal.valueOf(lotSize));
+            if (pricePerLot.signum() <= 0) continue;
+
+            int lotsToBuy = moneyForCategory.divide(pricePerLot, 0, RoundingMode.FLOOR).intValue();
+
+            if (lotsToBuy > 0) {
+                BigDecimal finalBuyAmount = pricePerLot.multiply(new BigDecimal(lotsToBuy));
+                actions.add(new BuyAction(
+                        instrumentDetails.getTicker(),
+                        instrumentDetails.getFigi(),
+                        instrumentDetails.getName(),
+                        lotsToBuy,
+                        finalBuyAmount,
+                        "Восстановление баланса категории"
+                ));
+            }
+        }
         return actions;
-    }*/
+    }
 }

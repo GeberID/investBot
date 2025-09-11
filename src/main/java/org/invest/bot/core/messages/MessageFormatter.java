@@ -32,40 +32,41 @@ public class MessageFormatter {
      * @return Готовый к отправке текст сообщения.
      */
     public String formatRebalancePlan(RebalancePlan plan) {
+        boolean hasSells = !plan.sellActions().isEmpty();
+        boolean hasBuys = !plan.buyActions().isEmpty();
+
         // --- Сценарий 1: Портфель уже сбалансирован ---
-        if (plan.sellActions().isEmpty() && plan.buyActions().isEmpty()) {
+        if (!hasSells && !hasBuys) {
             return "✅ <b>План ребалансировки</b>\n\n" +
-                    "Ваш портфель идеально сбалансирован в рамках установленных допусков. " +
-                    "Никаких действий не требуется. Отличная работа!";
+                    "Ваш портфель идеально сбалансирован. Никаких действий не требуется.";
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append("<b>План Ребалансировки Портфеля</b>\n\n");
 
-        // --- Сценарий 2: Есть что продать и на что купить ---
-        if (!plan.sellActions().isEmpty()) {
-            // --- Блок Продажи ---
+        // --- Сценарий 2: Классическая ребалансировка (есть и продажи, и покупки) ---
+        if (hasSells) {
+            sb.append("<b>План Ребалансировки Портфеля</b>\n\n");
+            // Блок Продажи
             sb.append(formatSellBlock(plan.sellActions(), plan.totalCashFromSales()));
 
-            // --- Блок Покупки ---
-            /*if (!plan.buyActions().isEmpty()) {
-                sb.append(formatBuyBlock(plan.buyActions(), plan.totalCashFromSales()));
+            // Блок Покупки
+            if (hasBuys) {
+                sb.append("\n"); // Добавляем отступ между блоками
+                sb.append(formatBuyBlock(plan.buyActions()));
             } else {
-                // Этот случай возможен, если, например, нужно только продать излишки
+                // Edge case: есть продажи, но нечего покупать (например, просто выводим в кэш)
                 sb.append("\n<b>Шаг 2: Размещение средств</b>\n");
-                sb.append(String.format("<i>Рекомендуется направить высвобожденные средства (%s ₽) в резерв (TMON).</i>\n",
+                sb.append(String.format("<i>Рекомендуется направить высвобожденные средства (~%s ₽) в резерв.</i>\n",
                         formatAmount(plan.totalCashFromSales())));
-            }*/
+            }
         }
         // --- Сценарий 3: Нужно только покупать (например, после пополнения счета) ---
-        else if (!plan.buyActions().isEmpty()) {
+        else if (hasBuys) {
             sb.append("<b>План пополнения баланса</b>\n\n");
-            sb.append("<i>Обнаружены классы активов с долей ниже целевой. Рекомендуется направить средства на их пополнение:</i>\n");
-            for (BuyAction action : plan.buyActions()) {
-                String className = getFriendlyClassName(action.assetClass());
-                sb.append(String.format(" • Увеличить долю <b>%s</b> на сумму ~<b>%s ₽</b>\n",
-                        className, formatAmount(action.amount())));
-            }
+            // Просто используем наш новый хелпер, изменив заголовок
+            String buyBlock = formatBuyBlock(plan.buyActions())
+                    .replace("<b>Шаг 2: Покупка</b>\n", ""); // Убираем лишний заголовок
+            sb.append(buyBlock);
         }
 
         sb.append("\n<i>Все расчеты являются приблизительными.</i>");
@@ -451,29 +452,26 @@ public class MessageFormatter {
         return money.getValue().setScale(2, RoundingMode.HALF_UP) + " " + money.getCurrency().toUpperCase();
     }
 
-    /**
-     * Приватный хелпер для форматирования блока "Продажа".
-     */
     private String formatSellBlock(List<SellAction> sellActions, BigDecimal totalCash) {
-        return String.format("<b>Шаг 1: Продажа (высвободится ~%s ₽)</b>\n", formatAmount(totalCash)) +
-                sellActions.stream()
-                        .map(action -> String.format(" • Продать <b>%s</b> на сумму ~<b>%s ₽</b>\n   └ <i>Причина: %s</i>",
-                                action.name(), formatAmount(action.amount()), action.reason()))
-                        .collect(Collectors.joining("\n"));
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("<b>Шаг 1: Продажа (высвободится ~%s ₽)</b>\n", formatAmount(totalCash)));
+
+        for (SellAction action : sellActions) {
+            sb.append(String.format(" • Продать <b>%s</b> (<b>%d</b> лот) на сумму ~<b>%s ₽</b>\n",
+                    action.name(), action.lots(), formatAmount(action.amount())));
+            sb.append(String.format("   └ <i>Причина: %s</i>\n", action.reason()));
+        }
+        return sb.toString();
     }
 
-    /**
-     * Приватный хелпер для форматирования блока "Покупка".
-     */
-    private String formatBuyBlock(List<BuyAction> buyActions, BigDecimal totalCash) {
+    private String formatBuyBlock(List<BuyAction> buyActions) {
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("\n<b>Шаг 2: Покупка (на ~%s ₽)</b>\n", formatAmount(totalCash)));
-        sb.append("<i>Рекомендуется пропорционально распределить средства:</i>\n");
+        sb.append("<b>Шаг 2: Покупка</b>\n");
+        sb.append("<i>Рекомендуется направить средства на покупку:</i>\n");
 
         for (BuyAction action : buyActions) {
-            String className = getFriendlyClassName(action.assetClass());
-            sb.append(String.format(" • Направить на <b>%s</b> ~<b>%s ₽</b>\n",
-                    className, formatAmount(action.amount())));
+            sb.append(String.format(" • Купить <b>%s</b> (<b>%d</b> лот) на сумму ~<b>%s ₽</b>\n",
+                    action.name(), action.lots(), formatAmount(action.amount())));
         }
         return sb.toString();
     }
