@@ -12,10 +12,7 @@ import ru.tinkoff.piapi.core.models.Position;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static ru.tinkoff.piapi.contract.v1.GetTechAnalysisRequest.TypeOfPrice.TYPE_OF_PRICE_CLOSE;
@@ -115,5 +112,70 @@ public class InvestApiCore {
         Instant now = Instant.now();
         Instant monthAgo = now.minus(30, ChronoUnit.DAYS);
         return api.getOperationsService().getExecutedOperationsSync(accountId, monthAgo, now);
+    }
+
+    /**
+     * Получает полную информацию об инструменте по его FIGI.
+     * Использует внутренний кэш SDK для эффективности.
+     * @param figi FIGI инструмента
+     * @return Объект Instrument или null, если не найден.
+     */
+    public Instrument getInstrumentByFigi(String figi) {
+        try {
+            return api.getInstrumentsService().getInstrumentByFigiSync(figi);
+        } catch (Exception e) {
+            log.error("Не удалось найти инструмент по FIGI: {}", figi, e);
+            return null;
+        }
+    }
+
+    /**
+     * Универсальный метод для поиска ЛЮБОГО инструмента по его тикеру.
+     * Сначала находит инструмент через общий поиск, а затем получает
+     * полную информацию по найденному FIGI.
+     * @param ticker Тикер инструмента (напр. "SBER", "TMON@", "GLDRUB_TOM")
+     * @return Объект Instrument или null, если не найден.
+     */
+    public Instrument getInstrumentByTicker(String ticker) {
+        try {
+            // Шаг 1: Используем универсальный поиск, который вернет список совпадений.
+            List<InstrumentShort> searchResult = api.getInstrumentsService().findInstrumentSync(ticker);
+
+            // Шаг 2: Если ничего не найдено, возвращаем null.
+            if (searchResult.isEmpty()) {
+                log.warn("Инструмент с тикером '{}' не найден.", ticker);
+                return null;
+            }
+
+            // Шаг 3: Берем первый результат (обычно самый релевантный) и получаем его FIGI.
+            String figi = searchResult.get(0).getFigi();
+
+            // Шаг 4: Используем уже существующий у вас надежный метод getInstrumentByFigi,
+            // чтобы получить полную информацию. Это предотвращает дублирование кода.
+            return getInstrumentByFigi(figi);
+
+        } catch (Exception e) {
+            log.error("Ошибка при поиске инструмента по тикеру: {}", ticker, e);
+            return null;
+        }
+    }
+
+    /**
+     * Получает последние цены для списка инструментов по их FIGI.
+     * @param figis Список FIGI
+     * @return Карта [FIGI -> Quotation], содержащая цены.
+     */
+    public Map<String, Quotation> getLastPrices(List<String> figis) {
+        if (figis == null || figis.isEmpty()) {
+            return new HashMap<>();
+        }
+        try {
+            return api.getMarketDataService().getLastPricesSync(figis)
+                    .stream()
+                    .collect(Collectors.toMap(LastPrice::getFigi, LastPrice::getPrice));
+        } catch (Exception e) {
+            log.error("Не удалось получить последние цены для списка FIGI.", e);
+            return new HashMap<>(); // Возвращаем пустую карту в случае ошибки
+        }
     }
 }
