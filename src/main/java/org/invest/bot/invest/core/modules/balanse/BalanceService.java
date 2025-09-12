@@ -74,85 +74,69 @@ public class BalanceService {
      * ПРИВАТНЫЙ МЕТОД №1: Отвечает ТОЛЬКО за расчет действий по ПРОДАЖЕ.
      */
     private List<SellAction> calculateSellActions(ConcentrationProblem concentrationProblem, BigDecimal totalPortfolioValue) {
-        log.info("Inside calculateSellActions method:");
+        log.info("--- Запуск calculateSellActions ---");
         List<SellAction> actions = new ArrayList<>();
-        List<ActualDistribution> actualDistributions = concentrationProblem.getConcentrationInstrumentProblems()
-                .stream().filter(filter -> filter.getInstrumentStructure().equals(TARGET_STOCK_SATELLITE))
-                .toList();
-        log.info("actualDistributions:");
-        for (ActualDistribution actualDistribution : actualDistributions) {
-            log.info(actualDistribution.toString() + ":");
-            log.info("getInstrumentStructure " + actualDistribution.getInstrumentStructure());
-            log.info("getTotalPresent " + actualDistribution.getTotalPresent());
-            for (InstrumentObj instrument : actualDistribution.getInstruments().keySet()) {
-                log.info("instrument:");
-                log.info("getInstrumentUid " + instrument.getInstrumentUid());
-                log.info("getFigi " + instrument.getFigi());
-                log.info("getName " + instrument.getName());
-                log.info("getTicker " + instrument.getTicker());
-                log.info("getType " + instrument.getType());
-                log.info("getAverageBuyPrice " + instrument.getAverageBuyPrice().getValue());
-                log.info("getCurrentPrice " + instrument.getCurrentPrice().getValue());
-                log.info("getLot " + instrument.getLot());
-                log.info("getQuantity " + instrument.getQuantity());
-            }
 
-        }
-        // Работаем со списком проблемных инструментов, который вы уже подготовили
-        log.info("instToSell:");
-        for (InstrumentObj instToSell : actualDistributions.stream().findFirst().get().getInstruments().keySet()) {
-            BigDecimal pricePerShare = instToSell.getCurrentPrice().getValue();
-            int sharesPerLot = instToSell.getLot(); // Правильная лотность из WhiteListOfShares
-            int totalSharesInPortfolio = instToSell.getQuantity().intValue(); // Всего ШТУК акций в портфеле
-            log.info("pricePerShare " + pricePerShare);
-            log.info("sharesPerLot" + sharesPerLot);
-            log.info("instToSell " + totalSharesInPortfolio);
-            if (pricePerShare.signum() == 0 || sharesPerLot == 0) {
+        // Проходим по ВСЕМ категориям, где есть проблемы с концентрацией
+        for (ActualDistribution distribution : concentrationProblem.getConcentrationInstrumentProblems()) {
+            log.info("=> Анализ категории: {}", distribution.getInstrumentStructure());
+            log.info("   - Общая доля категории: {}%", distribution.getTotalPresent().setScale(2, RoundingMode.HALF_UP));
+
+            // Получаем правильный лимит для ЭТОЙ КОНКРЕТНОЙ категории
+            PortfolioInstrumentStructure limitConfig = getLimitByTarget(distribution.getInstrumentStructure());
+            if (limitConfig == null) {
+                log.warn("   - ПРЕДУПРЕЖДЕНИЕ: Лимит концентрации не найден для категории {}. Пропускаем.", distribution.getInstrumentStructure());
                 continue;
             }
+            BigDecimal concentrationLimit = limitConfig.value;
+            log.info("   - Применяемый лимит концентрации: {}%", concentrationLimit);
 
-            // --- ВЫЧИСЛЯЕМ ПРАВИЛЬНОЕ КОЛИЧЕСТВО ЛОТОВ В ПОРТФЕЛЕ ---
-            int currentLotsInPortfolio = totalSharesInPortfolio / sharesPerLot;
-            log.info("currentLotsInPortfolio " + currentLotsInPortfolio);
+            // Проходим по ВСЕМ инструментам с превышением внутри этой категории
+            for (InstrumentObj instToSell : distribution.getInstruments().keySet()) {
+                log.info("   -> Расчет для инструмента: '{}' ({})", instToSell.getName(), instToSell.getTicker());
 
-            // --- Шаг 1: Определяем "потолок" стоимости позиции в рублях ---
-            BigDecimal targetValueInRub = totalPortfolioValue
-                    .multiply(SATELLITE_CONCENTRATION_LIMIT.value)
-                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-            log.info("targetValueInRub " + targetValueInRub);
-            // --- Шаг 2: Вычисляем реальную цену одного лота ---
-            BigDecimal pricePerLot = pricePerShare.multiply(BigDecimal.valueOf(sharesPerLot));
-            log.info("pricePerLot " + pricePerLot);
-            // --- Шаг 3: Рассчитываем, сколько лотов мы можем себе позволить оставить ---
-            int targetLots = targetValueInRub.divide(pricePerLot, 0, RoundingMode.FLOOR).intValue();
-            log.info("targetLots " + targetLots);
-            // --- Шаг 4: Главная формула: сколько лотов нужно продать ---
-            // Теперь здесь будут правильные цифры: 1 - 0 = 1
-            int lotsToSell = currentLotsInPortfolio - targetLots;
-            log.info("lotsToSell " + lotsToSell);
-            // --- Шаг 5: Если нужно что-то продать, создаем SellAction ---
-            if (lotsToSell > 0) {
-                BigDecimal sellAmount = pricePerLot.multiply(new BigDecimal(lotsToSell));
-                log.info("sellAmount " + sellAmount);
-                actions.add(new SellAction(
-                        instToSell.getTicker(),
-                        instToSell.getFigi(),
-                        instToSell.getName(),
-                        lotsToSell,
-                        sellAmount,
-                        "Снижение риска концентрации"
-                ));
+                BigDecimal pricePerShare = instToSell.getCurrentPrice().getValue();
+                int sharesPerLot = instToSell.getLot();
+                int totalSharesInPortfolio = instToSell.getQuantity().intValue();
+
+                if (pricePerShare.signum() == 0 || sharesPerLot == 0) {
+                    log.warn("      - ПРЕДУПРЕЖДЕНИЕ: Некорректные данные (цена={} или лот={}). Пропускаем.", pricePerShare, sharesPerLot);
+                    continue;
+                }
+
+                int currentLotsInPortfolio = totalSharesInPortfolio / sharesPerLot;
+                log.debug("      - Данные: Цена за шт.={}, Акций в лоте={}, Всего акций={}, Всего лотов={}",
+                        pricePerShare.setScale(2), sharesPerLot, totalSharesInPortfolio, currentLotsInPortfolio);
+
+
+                BigDecimal targetValueInRub = totalPortfolioValue
+                        .multiply(concentrationLimit)
+                        .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+
+                BigDecimal pricePerLot = pricePerShare.multiply(BigDecimal.valueOf(sharesPerLot));
+                int targetLots = targetValueInRub.divide(pricePerLot, 0, RoundingMode.FLOOR).intValue();
+                int lotsToSell = currentLotsInPortfolio - targetLots;
+
+                log.debug("      - Расчет: Целевая стоимость={} RUB, Цена лота={}, Целевое кол-во лотов={}, Лотов к продаже={}",
+                        targetValueInRub, pricePerLot.setScale(2), targetLots, lotsToSell);
+
+                if (lotsToSell > 0) {
+                    BigDecimal sellAmount = pricePerLot.multiply(new BigDecimal(lotsToSell));
+                    log.info("      - РЕШЕНИЕ: Продать {} лот(ов) на сумму ~{} RUB", lotsToSell, sellAmount.setScale(2));
+                    actions.add(new SellAction(
+                            instToSell.getTicker(),
+                            instToSell.getFigi(),
+                            instToSell.getName(),
+                            lotsToSell,
+                            sellAmount,
+                            "Снижение риска концентрации"
+                    ));
+                } else {
+                    log.info("      - РЕШЕНИЕ: Продажа не требуется.");
+                }
             }
         }
-        log.info("actions TOTAL:");
-        for (SellAction action : actions) {
-            log.info("figi " + action.figi());
-            log.info("name " + action.name());
-            log.info("amount " + action.amount());
-            log.info("reason " + action.reason());
-            log.info("lots " + action.lots());
-        }
-
+        log.info("--- Завершение calculateSellActions. Сформировано {} действий на продажу. ---", actions.size());
         return actions;
     }
 
@@ -160,68 +144,87 @@ public class BalanceService {
      * ПРИВАТНЫЙ МЕТОД №2: Отвечает ТОЛЬКО за расчет действий по ПОКУПКЕ.
      */
     private List<BuyAction> calculateBuyActions(ConcentrationProblem concentrationProblem, BigDecimal availableCash) {
-        log.info("inside calculateBuyActions method:");
+        log.info("--- Запуск calculateBuyActions ---");
         List<BuyAction> actions = new ArrayList<>();
         if (availableCash == null || availableCash.signum() <= 0) {
+            log.warn("   - Выход: нет доступных средств для покупки (availableCash = {}).", availableCash);
+            log.info("--- Завершение calculateBuyActions. Сформировано 0 действий на покупку. ---");
             return actions;
         }
+        log.info("   - Доступные средства для покупки: {} RUB", availableCash.setScale(2, RoundingMode.HALF_UP));
 
         // --- Шаг 1: Находим дефицитные категории ---
+        log.info("=> Шаг 1: Поиск дефицитных категорий...");
         Map<PortfolioInstrumentStructure, BigDecimal> deficits = new HashMap<>();
         BigDecimal totalDeficitPercentage = BigDecimal.ZERO;
-        log.info("distribution:");
+
         for (ActualDistribution distribution : concentrationProblem.getConcentrationInstrumentProblems()) {
             PortfolioInstrumentStructure target = distribution.getInstrumentStructure();
             BigDecimal currentPercent = distribution.getTotalPresent();
-            log.info("target:" + target);
-            log.info("currentPercent:" + currentPercent);
+
             if (currentPercent.compareTo(target.value) < 0) {
                 BigDecimal deficit = target.value.subtract(currentPercent);
                 deficits.put(target, deficit);
                 totalDeficitPercentage = totalDeficitPercentage.add(deficit);
-                log.info("deficit:" + deficit);
-                log.info("totalDeficitPercentage:" + totalDeficitPercentage);
             }
         }
 
         if (totalDeficitPercentage.signum() == 0) {
+            log.info("   - Дефицитные категории не найдены.");
+            log.info("--- Завершение calculateBuyActions. Сформировано 0 действий на покупку. ---");
             return actions;
         }
+        log.info("   - Найдены дефициты в {} категориях: {}", deficits.size(), deficits.keySet());
+        log.info("   - Общий процент дефицита: {}%", totalDeficitPercentage.setScale(2));
+
 
         // --- Шаг 2: Определяем, ЧТО покупать и запрашиваем информацию ---
+        log.info("=> Шаг 2: Определение инструментов для покупки и запрос данных...");
         Map<PortfolioInstrumentStructure, String> purchaseTickerMap = new HashMap<>();
-        log.info("purchaseTickerMap:");
         getCorePurchaseTicker().ifPresent(ticker -> purchaseTickerMap.put(TARGET_STOCK_CORE, ticker));
         getReservePurchaseTicker().ifPresent(ticker -> purchaseTickerMap.put(TARGET_RESERVE, ticker));
         getProtectionPurchaseTicker().ifPresent(ticker -> purchaseTickerMap.put(TARGET_PROTECTION, ticker));
+        log.info("   - Сформирована карта покупок: {}", purchaseTickerMap);
+
         Map<String, Instrument> instrumentDetailsMap = new HashMap<>();
         for (String ticker : purchaseTickerMap.values()) {
-            Instrument instrument = apiCore.getInstrumentByTicker(ticker); // Используем новый метод
-            log.info("apiCore.getInstrumentByTicker(ticker) :" + instrument);
+            Instrument instrument = apiCore.getInstrumentByTicker(ticker);
             if (instrument != null) {
                 instrumentDetailsMap.put(ticker, instrument);
             }
         }
+        log.info("   - Запрошена информация по {} тикерам.", instrumentDetailsMap.size());
 
         List<String> figisToFetch = instrumentDetailsMap.values().stream().map(Instrument::getFigi).collect(Collectors.toList());
         Map<String, Quotation> lastPrices = apiCore.getLastPrices(figisToFetch);
-        log.info("figisToFetch:" + figisToFetch);
-        log.info("lastPrices:" + lastPrices);
-        log.info("Map.Entry<PortfolioInstrumentStructure, BigDecimal> entry:");
+        log.info("   - Запрошены цены по {} FIGI.", lastPrices.size());
+
+
         // --- Шаг 3: Распределяем деньги и конвертируем в лоты ---
+        log.info("=> Шаг 3: Распределение средств и расчет лотов...");
         for (Map.Entry<PortfolioInstrumentStructure, BigDecimal> entry : deficits.entrySet()) {
             PortfolioInstrumentStructure category = entry.getKey();
             String tickerToBuy = purchaseTickerMap.get(category);
+            log.info("   -> Анализ категории: {}", category);
 
-            if (tickerToBuy == null) continue;
+            if (tickerToBuy == null) {
+                log.warn("      - ПРЕДУПРЕЖДЕНИЕ: Инструмент для покупки не определен. Пропускаем.");
+                continue;
+            }
 
             Instrument instrumentDetails = instrumentDetailsMap.get(tickerToBuy);
-            if (instrumentDetails == null) continue;
+            if (instrumentDetails == null) {
+                log.error("      - ОШИБКА: Не удалось получить детали для тикера {}. Пропускаем.", tickerToBuy);
+                continue;
+            }
 
             Quotation lastPriceQuotation = lastPrices.get(instrumentDetails.getFigi());
-            if (lastPriceQuotation == null) continue;
+            if (lastPriceQuotation == null) {
+                log.error("      - ОШИБКА: Не удалось получить цену для FIGI {}. Пропускаем.", instrumentDetails.getFigi());
+                continue;
+            }
 
-            BigDecimal lastPrice = quotationToBigDecimal(lastPriceQuotation); // Нужен ваш хелпер
+            BigDecimal lastPrice = quotationToBigDecimal(lastPriceQuotation);
             int lotSize = instrumentDetails.getLot();
 
             BigDecimal deficit = entry.getValue();
@@ -229,22 +232,23 @@ public class BalanceService {
             BigDecimal moneyForCategory = availableCash.multiply(categoryWeight).setScale(2, RoundingMode.DOWN);
 
             BigDecimal pricePerLot = lastPrice.multiply(BigDecimal.valueOf(lotSize));
-            if (pricePerLot.signum() <= 0) continue;
+            if (pricePerLot.signum() <= 0) {
+                log.error("      - ОШИБКА: Цена за лот равна нулю для {}. Пропускаем.", tickerToBuy);
+                continue;
+            }
 
             int lotsToBuy = moneyForCategory.divide(pricePerLot, 0, RoundingMode.FLOOR).intValue();
-            log.info("PortfolioInstrumentStructure category:" + category);
-            log.info("tickerToBuy:" + tickerToBuy);
-            log.info("instrumentDetails:" + instrumentDetails);
-            log.info("lastPriceQuotation:" + lastPriceQuotation);
-            log.info("lastPrice:" + lastPrice);
-            log.info("deficit:" + deficit);
-            log.info("categoryWeight:" + categoryWeight);
-            log.info("moneyForCategory:" + moneyForCategory);
-            log.info("pricePerLot:" + pricePerLot);
-            log.info("lotsToBuy:" + lotsToBuy);
+
+            // Используем DEBUG для детальных расчетов, чтобы не засорять основной лог
+            log.debug("      - Расчет бюджета: Дефицит={}%, Доля дефицита={}, Бюджет на категорию={}",
+                    deficit.setScale(2), categoryWeight, moneyForCategory);
+            log.debug("      - Расчет лотов: Цена лота={}, Лотов к покупке (floor)={}",
+                    pricePerLot.setScale(2), lotsToBuy);
+
             if (lotsToBuy > 0) {
                 BigDecimal finalBuyAmount = pricePerLot.multiply(new BigDecimal(lotsToBuy));
-                log.info("finalBuyAmount:" + finalBuyAmount);
+                log.info("      - РЕШЕНИЕ: Купить '{}' ({} лот) на сумму ~{} RUB",
+                        instrumentDetails.getName(), lotsToBuy, finalBuyAmount.setScale(2));
                 actions.add(new BuyAction(
                         instrumentDetails.getTicker(),
                         instrumentDetails.getFigi(),
@@ -253,16 +257,11 @@ public class BalanceService {
                         finalBuyAmount,
                         "Восстановление баланса категории"
                 ));
+            } else {
+                log.info("      - РЕШЕНИЕ: Покупка не требуется (недостаточно средств для 1 лота).");
             }
         }
-        log.info("actions TOTAL:");
-        for (BuyAction action : actions) {
-            log.info("figi " + action.figi());
-            log.info("name " + action.name());
-            log.info("amount " + action.amount());
-            log.info("reason " + action.reason());
-            log.info("lots " + action.lots());
-        }
+        log.info("--- Завершение calculateBuyActions. Сформировано {} действий на покупку. ---", actions.size());
         return actions;
     }
 }

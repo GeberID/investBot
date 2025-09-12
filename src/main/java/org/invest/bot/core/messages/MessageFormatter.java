@@ -53,11 +53,12 @@ public class MessageFormatter {
             if (hasBuys) {
                 sb.append("\n"); // Добавляем отступ между блоками
                 sb.append(formatBuyBlock(plan.buyActions()));
+            } else if (!plan.buyActions().isEmpty()) { // <--- Измените это
+                sb.append(formatBuyBlock(plan.buyActions()));
             } else {
-                // Edge case: есть продажи, но нечего покупать (например, просто выводим в кэш)
+                // Новый блок: если нет конкретных покупок, даем общую рекомендацию
                 sb.append("\n<b>Шаг 2: Размещение средств</b>\n");
-                sb.append(String.format("<i>Рекомендуется направить высвобожденные средства (~%s ₽) в резерв.</i>\n",
-                        formatAmount(plan.totalCashFromSales())));
+                sb.append("<i>Рекомендуется направить высвобожденные средства на пополнение категорий с недостаточной долей.</i>\n");
             }
         }
         // --- Сценарий 3: Нужно только покупать (например, после пополнения счета) ---
