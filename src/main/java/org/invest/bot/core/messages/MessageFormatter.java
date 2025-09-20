@@ -8,10 +8,7 @@ import org.invest.bot.invest.core.modules.balanse.actions.BuyAction;
 import org.invest.bot.invest.core.modules.balanse.actions.SellAction;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Component;
-import ru.tinkoff.piapi.contract.v1.Dividend;
-import ru.tinkoff.piapi.core.models.Money;
-import ru.tinkoff.piapi.core.models.Portfolio;
-import ru.tinkoff.piapi.core.models.Position;
+import ru.tinkoff.piapi.contract.v1.*;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -20,14 +17,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.invest.bot.core.DataConvertUtility.convertTimeStampToStringWithoutYearSymbol;
-import static org.invest.bot.core.DataConvertUtility.getPercentCount;
+import static org.invest.bot.core.DataConvertUtility.*;
+import static ru.ttech.piapi.core.helpers.NumberMapper.moneyValueToBigDecimal;
 
 @Component
 public class MessageFormatter {
     /**
      * НОВЫЙ ПУБЛИЧНЫЙ МЕТОД
      * Форматирует план ребалансировки в понятное для человека сообщение.
+     *
      * @param plan Объект RebalancePlan, полученный от RebalanceService.
      * @return Готовый к отправке текст сообщения.
      */
@@ -74,9 +72,9 @@ public class MessageFormatter {
         return sb.toString();
     }
 
-    public String reportInstrument(String ticker, Portfolio portfolio,
+    public String reportInstrument(String ticker, PortfolioResponse portfolio,
                                    InstrumentObj targetPosition,
-                                   Position portfolioPosition,
+                                   PortfolioPosition portfolioPosition,
                                    BigDecimal sma50,
                                    BigDecimal sma200,
                                    BigDecimal weeklyRsi,
@@ -89,10 +87,10 @@ public class MessageFormatter {
 
         StringBuilder report = new StringBuilder();
         report.append(String.format("<b>Сводка по %s (%s)</b>\n\n", targetPosition.getName(), targetPosition.getTicker()));
-        positionFormatter(report,portfolioPosition);
-        finResultFormatter(report,targetPosition);
-        techAnalyseFormatter(report,portfolioPosition,sma50,sma200,weeklyRsi,macdLine,signalLine);
-        corporateSituationsFormatter(report,portfolio,targetPosition,dividends);
+        positionFormatter(report, portfolioPosition);
+        finResultFormatter(report, targetPosition);
+        techAnalyseFormatter(report, portfolioPosition, sma50, sma200, weeklyRsi, macdLine, signalLine);
+        corporateSituationsFormatter(report, portfolio, targetPosition, dividends);
         return report.toString();
     }
 
@@ -105,7 +103,7 @@ public class MessageFormatter {
      * @return Готовый к отправке текст сообщения
      */
     public String portfolio(String accountName, List<InstrumentObj> instrumentObjs,
-                            Portfolio portfolio, String filterType) {
+                            PortfolioResponse portfolio, String filterType) {
         StringBuilder sb = new StringBuilder();
         sb.append("<b>\uD83D\uDDC3️ ").append(accountName).append("</b>\n\n");
         if (instrumentObjs.isEmpty()) {
@@ -174,40 +172,41 @@ public class MessageFormatter {
         }
     }
 
-    private StringBuilder positionFormatter(StringBuilder report,Position portfolioPosition){
-                report.append("<b>Позиция в портфеле:</b>\n")
-                .append(String.format(" • Количество: %s шт.\n", portfolioPosition.getQuantity().setScale(0, RoundingMode.DOWN)))
+    private StringBuilder positionFormatter(StringBuilder report, PortfolioPosition portfolioPosition) {
+        BigDecimal currentPrice = quotationToBigDecimal(portfolioPosition.getCurrentPrice());
+        BigDecimal quantity = quotationToBigDecimal(portfolioPosition.getQuantity());
+
+        report.append("<b>Позиция в портфеле:</b>\n")
+                .append(String.format(" • Количество: %s шт.\n", quantity.setScale(0, RoundingMode.DOWN)))
                 .append(String.format(" • Средняя цена: %s\n", formatMoney(portfolioPosition.getAveragePositionPrice())))
                 .append(String.format(" • Текущая цена: %s\n", formatMoney(portfolioPosition.getCurrentPrice())))
-                .append(String.format(" • Вся цена: %s\n", portfolioPosition.getCurrentPrice().getValue()
-                        .multiply(portfolioPosition.getQuantity()).setScale(2, RoundingMode.HALF_UP)));
+                .append(String.format(" • Вся цена: %s\n", currentPrice.multiply(quantity).setScale(2, RoundingMode.HALF_UP)));
         return report;
     }
 
     private StringBuilder techAnalyseFormatter(StringBuilder report,
-                                               Position portfolioPosition,
-                                               BigDecimal sma50,
-                                               BigDecimal sma200,
-                                               BigDecimal weeklyRsi,
-                                               BigDecimal macdLine,
-                                               BigDecimal signalLine){
+                                               PortfolioPosition portfolioPosition,
+                                               BigDecimal sma50, BigDecimal sma200,
+                                               BigDecimal weeklyRsi, BigDecimal macdLine, BigDecimal signalLine) {
+        BigDecimal currentPrice = quotationToBigDecimal(portfolioPosition.getCurrentPrice());
         report.append("\n<b>Технический анализ (долгосрок):</b>\n")
-                .append(formatTrend200(portfolioPosition.getCurrentPrice().getValue(), sma200))
-                .append(formatTrend50(portfolioPosition.getCurrentPrice().getValue(), sma50))
+                .append(formatTrend200(currentPrice, sma200))
+                .append(formatTrend50(currentPrice, sma50))
                 .append(formatRsi(weeklyRsi))
-                .append(formatMacd(macdLine,signalLine));
+                .append(formatMacd(macdLine, signalLine));
         return report;
     }
 
-    private StringBuilder finResultFormatter(StringBuilder report,  InstrumentObj targetPosition){
+    private StringBuilder finResultFormatter(StringBuilder report, InstrumentObj targetPosition) {
         report.append("\n<b>Финансовый результат:</b>\n");
 
-        BigDecimal profitValue = targetPosition.getTotalProfit();
-        Money averageBuyPrice = targetPosition.getAverageBuyPrice();
+        BigDecimal profitValue = quotationToBigDecimal(targetPosition.getExpectedYield());
+        MoneyValue averageBuyPrice = targetPosition.getAverageBuyPrice();
 
         if (profitValue != null && averageBuyPrice != null) {
-            BigDecimal totalInvested = averageBuyPrice.getValue().multiply(targetPosition.getQuantity());
-
+            BigDecimal avgPriceDecimal = moneyValueToBigDecimal(averageBuyPrice);
+            BigDecimal quantityDecimal = quotationToBigDecimal(targetPosition.getQuantity());
+            BigDecimal totalInvested = avgPriceDecimal.multiply(quantityDecimal);
             BigDecimal profitPercentage = BigDecimal.ZERO;
             if (totalInvested.signum() != 0) {
                 profitPercentage = profitValue.multiply(BigDecimal.valueOf(100))
@@ -224,16 +223,20 @@ public class MessageFormatter {
     }
 
     private StringBuilder corporateSituationsFormatter(StringBuilder report,
-                                                       Portfolio portfolio,
+                                                       PortfolioResponse portfolio, // <-- ИСПРАВЛЕНО
                                                        InstrumentObj targetPosition,
-                                                       List<Dividend> dividends){
+                                                       List<Dividend> dividends) {
         report.append("\n<b>Корпоративные события:</b>\n")
-                .append(formatDividends(dividends, targetPosition) + "\n")
-                .append(" • Доля в портфеле: ")
-                .append(getPercentCount(portfolio.getTotalAmountPortfolio(),
-                        targetPosition.getQuantity().multiply(targetPosition.getCurrentPrice().getValue())))
-                .append("\n")
-                .append(" • Тип: Спутник\n");
+                .append(formatDividends(dividends, targetPosition)).append("\n"); // Добавил перенос строки
+
+        BigDecimal totalPortfolioValue = moneyValueToBigDecimal(portfolio.getTotalAmountPortfolio());
+        BigDecimal currentPositionValue = quotationToBigDecimal(targetPosition.getCurrentPrice())
+                .multiply(quotationToBigDecimal(targetPosition.getQuantity()));
+
+        BigDecimal shareInPortfolio = getPercentCount(totalPortfolioValue, currentPositionValue);
+
+        report.append(" • Доля в портфеле: ").append(shareInPortfolio.setScale(2, RoundingMode.HALF_UP)).append("%\n");
+        report.append(" • Тип: Спутник\n");
         return report;
     }
 
@@ -277,7 +280,7 @@ public class MessageFormatter {
         return String.format(" • Недельный RSI(14): %s (%s)\n", rsiStatus, rsiValue.setScale(2, RoundingMode.HALF_UP));
     }
 
-    private String formatMacd(BigDecimal macdLine,BigDecimal signalLine) {
+    private String formatMacd(BigDecimal macdLine, BigDecimal signalLine) {
         if (macdLine == null && signalLine == null) {
             return " • Импульс (MACD): недостаточно данных\n";
         }
@@ -302,7 +305,7 @@ public class MessageFormatter {
         sb.append(" • Ближайшие дивиденды:" + convertTimeStampToStringWithoutYearSymbol(nextDividend.getLastBuyDate()) + "\n")
                 .append(" • Cумма дивидендов на 1 акцию: ")
                 .append(nextDividend.getDividendNet().getUnits() + " " + nextDividend.getDividendNet().getCurrency() + "\n")
-                .append(" • Получишь дивидендов: " + targetPosition.getQuantity().multiply(BigDecimal.valueOf(nextDividend.getDividendNet().getUnits())));
+                .append(" • Получишь дивидендов: " + quotationToBigDecimal(targetPosition.getQuantity()).multiply(BigDecimal.valueOf(nextDividend.getDividendNet().getUnits())));
 
         return sb.toString();
     }
@@ -349,27 +352,33 @@ public class MessageFormatter {
         StringBuilder sb = new StringBuilder();
         DecimalFormat qtyFormat = new DecimalFormat("#,###.##");
         DecimalFormat priceFormat = new DecimalFormat("#,##0.00");
+
+        // --- Шаг 1: Конвертируем все в BigDecimal ---
+        BigDecimal quantity = quotationToBigDecimal(instrumentObj.getQuantity());
+        BigDecimal currentPrice = moneyValueToBigDecimal(instrumentObj.getCurrentPrice());
+        BigDecimal totalProfit = quotationToBigDecimal(instrumentObj.getExpectedYield());
+        BigDecimal avgBuyPrice = moneyValueToBigDecimal(instrumentObj.getAveragePositionPrice());
+
+        // --- Шаг 2: Форматируем и выводим ---
         String name = instrumentObj.getName();
         if (name.length() > 13) {
             name = name.substring(0, 12) + ".";
         }
-        String quantityStr = qtyFormat.format(instrumentObj.getQuantity());
-        String priceStr = priceFormat.format(instrumentObj.getCurrentPrice().getValue())
-                + getCurrencySymbol(instrumentObj.getCurrentPrice().getCurrency());
-        String totalPriceStr = priceFormat.format(instrumentObj.getCurrentPrice().getValue()
-                .multiply(instrumentObj.getQuantity())) + getCurrencySymbol(instrumentObj.getCurrentPrice().getCurrency());
+        String quantityStr = qtyFormat.format(quantity);
+        String priceStr = priceFormat.format(currentPrice) + getCurrencySymbol(instrumentObj.getCurrentPrice().getCurrency());
+        String totalPriceStr = priceFormat.format(currentPrice.multiply(quantity)) + getCurrencySymbol(instrumentObj.getCurrentPrice().getCurrency());
+
         sb.append(String.format("%-14s %-8s %12s %12s\n", name, quantityStr, priceStr, totalPriceStr));
-        BigDecimal profitValue = instrumentObj.getTotalProfit();
-        Money averageBuyPrice = instrumentObj.getAverageBuyPrice();
-        if (profitValue != null && profitValue.signum() != 0) {
-            BigDecimal totalInvested = instrumentObj.getAverageBuyPrice().getValue().multiply(instrumentObj.getQuantity());
+
+        if (totalProfit != null && totalProfit.signum() != 0) {
+            BigDecimal totalInvested = avgBuyPrice.multiply(quantity);
             BigDecimal profitPercentage = BigDecimal.ZERO;
             if (totalInvested.signum() != 0) {
-                profitPercentage = profitValue.multiply(BigDecimal.valueOf(100))
+                profitPercentage = totalProfit.multiply(BigDecimal.valueOf(100))
                         .divide(totalInvested, 2, RoundingMode.HALF_UP);
             }
-            String profitCurrencySymbol = getCurrencySymbol(averageBuyPrice.getCurrency());
-            String profitStr = formatProfit(profitValue, profitCurrencySymbol);
+            String profitCurrencySymbol = getCurrencySymbol(instrumentObj.getAveragePositionPrice().getCurrency());
+            String profitStr = formatProfit(totalProfit, profitCurrencySymbol);
             String percentageStr = formatPercentage(profitPercentage);
             sb.append(String.format("  └ P/L: %s (%s)\n", profitStr, percentageStr));
         }
@@ -379,27 +388,26 @@ public class MessageFormatter {
     /**
      * Генерирует текстовый блок со структурой портфеля в процентах.
      */
-    private String generateAllocationSummary(Portfolio portfolio) {
-        Money totalValue = portfolio.getTotalAmountPortfolio();
-        String currency = portfolio.getTotalAmountPortfolio().getCurrency();
-        if (totalValue.getValue().signum() == 0) {
-            return "";
-        }
+    private String generateAllocationSummary(PortfolioResponse portfolio) {
+        MoneyValue totalValue = portfolio.getTotalAmountPortfolio();
+        if (moneyValueToBigDecimal(totalValue).signum() == 0) return "";
+
         StringBuilder summary = new StringBuilder();
         summary.append("\n<b>Структура портфеля:</b>\n");
-        addAssetAllocationLine(summary, "Акции \uD83D\uDCC8", portfolio.getTotalAmountShares(), totalValue);
-        addAssetAllocationLine(summary, "Облигации \uD83D\uDCDC", portfolio.getTotalAmountBonds(), totalValue);
-        addAssetAllocationLine(summary, "Фонды \uD83D\uDDA5️", portfolio.getTotalAmountEtfs(), totalValue);
-        addAssetAllocationLine(summary, "Валюта \uD83D\uDCB0", portfolio.getTotalAmountCurrencies(), totalValue);
-        addAssetAllocationLine(summary, "<b>Стоимость</b>: %s " + currency + "\n", totalValue.getValue());
-        addAssetAllocationLine(summary, "<b>Профит</b>: %s%%", portfolio.getExpectedYield());
+        addAssetAllocationLine(summary, "Акции 📈", portfolio.getTotalAmountShares(), totalValue);
+        addAssetAllocationLine(summary, "Облигации 📜", portfolio.getTotalAmountBonds(), totalValue);
+        addAssetAllocationLine(summary, "Фонды 🏦", portfolio.getTotalAmountEtf(), totalValue);
+        addAssetAllocationLine(summary, "Валюта 💵", portfolio.getTotalAmountCurrencies(), totalValue);
+        summary.append(String.format("<b>Стоимость</b>: %s\n", formatMoney(totalValue)));
+        summary.append(String.format("<b>Профит</b>: %s%%", portfolio.getExpectedYield()));
         return summary.toString();
     }
 
-    private void addAssetAllocationLine(StringBuilder sb, String name, Money amount, Money total) {
-        if (amount != null && amount.getValue().signum() != 0) {
-            sb.append(String.format("%-15s %s | %s%%\n", name + ":", amount.getValue()
-                    .setScale(2, RoundingMode.HALF_UP), getPercentCount(total, amount)));
+    private void addAssetAllocationLine(StringBuilder sb, String name, MoneyValue amount, MoneyValue total) {
+        if (amount != null && moneyValueToBigDecimal(amount).signum() != 0) {
+            sb.append(String.format("%-15s %s | %s%%\n", name + ":",
+                    moneyValueToBigDecimal(amount).setScale(2, RoundingMode.HALF_UP),
+                    getPercentCount(moneyValueToBigDecimal(total), moneyValueToBigDecimal(amount)).setScale(2, RoundingMode.HALF_UP)));
         }
     }
 
@@ -408,6 +416,7 @@ public class MessageFormatter {
             sb.append(String.format(stringFormat, bigDecimal.setScale(2, RoundingMode.HALF_UP)));
         }
     }
+
 
     private String getFriendlyTypeName(String instrumentType) {
         switch (instrumentType.toLowerCase()) {
@@ -448,9 +457,10 @@ public class MessageFormatter {
         return String.format("%s%s%s%%", emoji, sign, percentage.abs());
     }
 
-    private String formatMoney(ru.tinkoff.piapi.core.models.Money money) {
-        if (money == null) return "N/A";
-        return money.getValue().setScale(2, RoundingMode.HALF_UP) + " " + money.getCurrency().toUpperCase();
+    private String formatMoney(MoneyValue moneyValue) {
+        if (moneyValue == null) return "N/A";
+        BigDecimal value = moneyValueToBigDecimal(moneyValue);
+        return value.setScale(2, RoundingMode.HALF_UP) + " " + getCurrencySymbol(moneyValue.getCurrency());
     }
 
     private String formatSellBlock(List<SellAction> sellActions, BigDecimal totalCash) {
@@ -482,12 +492,18 @@ public class MessageFormatter {
      */
     private String getFriendlyClassName(PortfolioInstrumentStructure target) {
         switch (target) {
-            case TARGET_STOCK_CORE: return "Акции (Ядро)";
-            case TARGET_STOCK_SATELLITE: return "Акции (Спутники)";
-            case TARGET_BOND: return "Облигации";
-            case TARGET_PROTECTION: return "Защита";
-            case TARGET_RESERVE: return "Резерв";
-            default: return "Категория";
+            case TARGET_STOCK_CORE:
+                return "Акции (Ядро)";
+            case TARGET_STOCK_SATELLITE:
+                return "Акции (Спутники)";
+            case TARGET_BOND:
+                return "Облигации";
+            case TARGET_PROTECTION:
+                return "Защита";
+            case TARGET_RESERVE:
+                return "Резерв";
+            default:
+                return "Категория";
         }
     }
 

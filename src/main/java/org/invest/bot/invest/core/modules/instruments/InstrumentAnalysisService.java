@@ -6,8 +6,8 @@ import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Service;
 import ru.tinkoff.piapi.contract.v1.Dividend;
 import ru.tinkoff.piapi.contract.v1.GetTechAnalysisResponse;
-import ru.tinkoff.piapi.core.models.Portfolio;
-import ru.tinkoff.piapi.core.models.Position;
+import ru.tinkoff.piapi.contract.v1.PortfolioPosition;
+import ru.tinkoff.piapi.contract.v1.PortfolioResponse;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -34,9 +34,10 @@ public class InstrumentAnalysisService {
         BigDecimal signalLine = null;
         List<Dividend> dividends = null;
         String accountId = apiCore.getAccounts().get(0).getId();
-        Portfolio portfolio = apiCore.getPortfolio(accountId);
-        InstrumentObj instrumentObj = apiCore.getInstrument(portfolio, ticker);
-        Position portfolioPosition = null;
+        PortfolioResponse portfolio = apiCore.getPortfolio(accountId);
+        InstrumentObj instrumentObj = apiCore.getInstruments(portfolio).stream()
+                .filter(filter -> filter.getTicker().equals(ticker)).findFirst().orElse(null);
+        PortfolioPosition portfolioPosition = null;
         if (instrumentObj != null) {
             portfolioPosition = apiCore.getPortfolioPosition(accountId, instrumentObj.getFigi());
             sma50 = quotationToBigDecimal(apiCore.getTechAnalysis(instrumentObj,
@@ -50,7 +51,7 @@ public class InstrumentAnalysisService {
             signalLine = quotationToBigDecimal(macd.getSignal());
             dividends = apiCore.getDividends(instrumentObj.getFigi());
         }
-        return messageFormatter.reportInstrument(ticker,portfolio, instrumentObj, portfolioPosition,sma50,sma200, weeklyRsi,
-                macdLine,signalLine,dividends);
+        return messageFormatter.reportInstrument(ticker, portfolio, instrumentObj, portfolioPosition, sma50, sma200, weeklyRsi,
+                macdLine, signalLine, dividends);
     }
 }

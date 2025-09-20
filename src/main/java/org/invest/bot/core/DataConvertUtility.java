@@ -12,16 +12,16 @@ import java.time.Instant;
 import java.util.Date;
 
 public final class DataConvertUtility {
-    public static BigDecimal getPercentCount(Money total, Money instrument){
-        return getPercentCount(total.getValue(),instrument.getValue());
+    public static BigDecimal getPercentCount(MoneyValue total, MoneyValue instrument){
+        return getPercentCount(total,instrument);
     }
     public static BigDecimal getPercentCount(BigDecimal total, BigDecimal instrument){
         return instrument
                 .multiply(new BigDecimal(100))
                 .divide(total, 2, RoundingMode.HALF_UP);
     }
-    public static BigDecimal getPercentCount(Money total, BigDecimal instrument){
-        return getPercentCount(total.getValue(),instrument);
+    public static BigDecimal getPercentCount(MoneyValue total, BigDecimal instrument){
+        return getPercentCount(total,instrument);
     }
 
     public static BigDecimal quotationToBigDecimal(MoneyValue quotation) {

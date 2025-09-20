@@ -17,6 +17,8 @@ public class InstrumentObj {
     private final String figi;
     private final Boolean getBuyAvailableFlag;
     private final int lot;
+    private final Quotation expectedYield;
+    private final MoneyValue averagePositionPrice;
 
     public InstrumentObj(PortfolioPosition position, Instrument instrument, int lot) {
         this.name = instrument.getName();
@@ -30,6 +32,8 @@ public class InstrumentObj {
         this.figi = position.getFigi();
         this.getBuyAvailableFlag = instrument.getBuyAvailableFlag();
         this.lot = lot;
+        this.expectedYield = position.getExpectedYield();
+        this.averagePositionPrice = position.getAveragePositionPrice();
     }
 
     public String getName() {
@@ -74,5 +78,13 @@ public class InstrumentObj {
 
     public int getLot() {
         return lot;
+    }
+
+    public Quotation getExpectedYield() {
+        return expectedYield;
+    }
+
+    public MoneyValue getAveragePositionPrice() {
+        return averagePositionPrice;
     }
 }
