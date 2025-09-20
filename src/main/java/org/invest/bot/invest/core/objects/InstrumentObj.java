@@ -1,25 +1,24 @@
 package org.invest.bot.invest.core.objects;
 
 import ru.tinkoff.piapi.contract.v1.Instrument;
-import ru.tinkoff.piapi.core.models.Money;
-import ru.tinkoff.piapi.core.models.Position;
-
-import java.math.BigDecimal;
+import ru.tinkoff.piapi.contract.v1.MoneyValue;
+import ru.tinkoff.piapi.contract.v1.PortfolioPosition;
+import ru.tinkoff.piapi.contract.v1.Quotation;
 
 public class InstrumentObj {
     private final String name;
     private final String instrumentUid;
-    private final BigDecimal quantity;
-    private final Money currentPrice;
+    private final Quotation quantity;
+    private final MoneyValue currentPrice;
     private final String type;
     private final String ticker;
-    private final BigDecimal totalProfit;
-    private final Money averageBuyPrice;
+    private final Quotation totalProfit;
+    private final MoneyValue averageBuyPrice;
     private final String figi;
     private final Boolean getBuyAvailableFlag;
     private final int lot;
 
-    public InstrumentObj(Position position, Instrument instrument, int lot) {
+    public InstrumentObj(PortfolioPosition position, Instrument instrument, int lot) {
         this.name = instrument.getName();
         this.instrumentUid = instrument.getUid();
         this.quantity = position.getQuantity();
@@ -37,11 +36,11 @@ public class InstrumentObj {
         return name;
     }
 
-    public BigDecimal getQuantity() {
+    public Quotation getQuantity() {
         return quantity;
     }
 
-    public Money getCurrentPrice() {
+    public MoneyValue getCurrentPrice() {
         return currentPrice;
     }
 
@@ -53,11 +52,11 @@ public class InstrumentObj {
         return ticker;
     }
 
-    public BigDecimal getTotalProfit() {
+    public Quotation getTotalProfit() {
         return totalProfit;
     }
 
-    public Money getAverageBuyPrice() {
+    public MoneyValue getAverageBuyPrice() {
         return averageBuyPrice;
     }
 

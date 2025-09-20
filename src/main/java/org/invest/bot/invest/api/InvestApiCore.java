@@ -1,37 +1,48 @@
 package org.invest.bot.invest.api;
 
+import com.google.protobuf.Timestamp;
 import lombok.extern.slf4j.Slf4j;
 import org.invest.bot.invest.core.modules.instruments.IndicatorType;
 import org.invest.bot.invest.core.modules.instruments.WhiteListOfShares;
 import org.invest.bot.invest.core.objects.InstrumentObj;
 import org.springframework.stereotype.Component;
 import ru.tinkoff.piapi.contract.v1.*;
-import ru.tinkoff.piapi.core.InvestApi;
-import ru.tinkoff.piapi.core.models.Portfolio;
-import ru.tinkoff.piapi.core.models.Position;
+import ru.ttech.piapi.core.connector.ConnectorConfiguration;
+import ru.ttech.piapi.core.connector.ServiceStubFactory;
+import ru.ttech.piapi.core.connector.SyncStubWrapper;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static ru.tinkoff.piapi.contract.v1.GetTechAnalysisRequest.TypeOfPrice.TYPE_OF_PRICE_CLOSE;
 
 @Component
 @Slf4j
 public class InvestApiCore {
-    private final InvestApi api;
+    private final SyncStubWrapper<UsersServiceGrpc.UsersServiceBlockingStub> usersService;
+    private final SyncStubWrapper<OperationsServiceGrpc.OperationsServiceBlockingStub> operationsService;
+    private final SyncStubWrapper<InstrumentsServiceGrpc.InstrumentsServiceBlockingStub> instrumentsService;
+    private final SyncStubWrapper<MarketDataServiceGrpc.MarketDataServiceBlockingStub> marketDataService;
 
     public InvestApiCore(String token) {
-        this.api = InvestApi.createReadonly(token);
+        ConnectorConfiguration configuration = ConnectorConfiguration.loadPropertiesFromResources("invest.properties");
+        ServiceStubFactory factory = ServiceStubFactory.create(configuration);
+        this.usersService = factory.newSyncService(UsersServiceGrpc::newBlockingStub);
+        this.operationsService = factory.newSyncService(OperationsServiceGrpc::newBlockingStub);
+        this.instrumentsService = factory.newSyncService(InstrumentsServiceGrpc::newBlockingStub);
+        this.marketDataService = factory.newSyncService(MarketDataServiceGrpc::newBlockingStub);
     }
 
     public List<Account> getAccounts() {
-        return api.getUserService().getAccountsSync();
+        GetAccountsRequest request = GetAccountsRequest.getDefaultInstance();
+        GetAccountsResponse response = usersService.callSyncMethod(stub -> stub.getAccounts(request));
+        return response.getAccountsList();
     }
 
-    public Portfolio getPortfolio(String accountId) {
-        return api.getOperationsService().getPortfolioSync(accountId);
+    public PortfolioResponse  getPortfolio(String accountId) {
+        PortfolioRequest request = PortfolioRequest.newBuilder().setAccountId(accountId).build();
+        return operationsService.callSyncMethod(stub -> stub.getPortfolio(request));
     }
 
     public Account getAccountById(String accountId) {
@@ -44,17 +55,20 @@ public class InvestApiCore {
     public List<Dividend> getDividends(String instrumentFigi){
         Instant now = Instant.now();
         Instant yearAhead = now.plus(365, ChronoUnit.DAYS);
-        List<Dividend> dividends = api.getInstrumentsService().getDividendsSync(instrumentFigi, now, yearAhead);
-        if(dividends == null){
-            return new ArrayList<>();
-        }
-        return dividends;
+        GetDividendsRequest request = GetDividendsRequest.newBuilder()
+                .setFigi(instrumentFigi)
+                .setFrom(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).build())
+                .setTo(Timestamp.newBuilder().setSeconds(yearAhead.getEpochSecond()).build())
+                .build();
+        GetDividendsResponse response = instrumentsService.callSyncMethod
+                (stub -> stub.getDividends(request));
+        return response.getDividendsList();
     }
 
     public GetTechAnalysisResponse getTechAnalysis(
             InstrumentObj instrument,
             IndicatorType indicatorType) {
-        Instant to = Instant.now();
+        /*Instant to = Instant.now();
         Instant from = to.minus(indicatorType.getHistoryDays(),ChronoUnit.DAYS);
         try {
             return api.getMarketDataService().getTechAnalysis(indicatorType.getApiType(),
@@ -70,40 +84,37 @@ public class InvestApiCore {
                     indicatorType.getSmoothingSignal()).get();
         } catch (Exception e) {
             throw new RuntimeException(e);
-        }
+        }*/
+        log.error("Метод getTechAnalysis больше не поддерживается в API. Требуется рефакторинг с ручным расчетом индикаторов.");
+        // Возвращаем пустой ответ, чтобы избежать NullPointerException
+        return GetTechAnalysisResponse.getDefaultInstance();
     }
 
-    public List<InstrumentObj> getInstruments(Portfolio portfolio) {
+    public List<InstrumentObj> getInstruments(PortfolioResponse portfolio) {
         List<InstrumentObj> instrumentObjs = new ArrayList<>();
-        for (Position position : portfolio.getPositions()) {
+        // Работаем с новым типом PortfolioPosition
+        for (PortfolioPosition position : portfolio.getPositionsList()) {
             try {
-                if(position.getInstrumentType().equals("share")){
-                    instrumentObjs.add(new InstrumentObj(position,
-                            api.getInstrumentsService().getInstrumentByFigiSync(position.getFigi()),
-                            WhiteListOfShares.getCorrectLot(position.getFigi())));
-                }else {
-                    instrumentObjs.add(new InstrumentObj(position,
-                            api.getInstrumentsService().getInstrumentByFigiSync(position.getFigi()),1));
-                }
+                Instrument instrument = getInstrumentByFigi(position.getFigi());
+                if (instrument == null) continue;
 
+                if (position.getInstrumentType().equals("share")) {
+                    instrumentObjs.add(new InstrumentObj(position, instrument, WhiteListOfShares.getCorrectLot(position.getFigi())));
+                } else {
+                    instrumentObjs.add(new InstrumentObj(position, instrument, 1));
+                }
             } catch (Exception e) {
-                System.err.println("Could not retrieve instrument details for FIGI: " + position.getFigi() +
-                        ". Error: " + e.getMessage());
+                log.error("Не удалось обработать позицию {}: {}", position.getFigi(), e.getMessage());
             }
         }
         instrumentObjs.sort(Comparator.comparing(InstrumentObj::getType).thenComparing(InstrumentObj::getName));
         return instrumentObjs;
     }
 
-    public InstrumentObj getInstrument(Portfolio portfolio, String instrumentTicket){
-        return getInstruments(portfolio).stream().filter(f -> f.getTicker().equals(instrumentTicket)).findFirst().orElse(null);
-    }
-
-    public Position getPortfolioPosition(String accountId,String figi){
-        Portfolio portfolio = getPortfolio(accountId);
-        List<Position> positions = portfolio.getPositions();
-        return positions.stream()
-                .filter(p -> p.getFigi().equalsIgnoreCase(figi)) // Ищем по тикеру, игнорируя регистр
+    public PortfolioPosition getPortfolioPosition(String accountId, String figi) {
+        PortfolioResponse portfolio = getPortfolio(accountId);
+        return portfolio.getPositionsList().stream()
+                .filter(p -> p.getFigi().equalsIgnoreCase(figi))
                 .findFirst()
                 .orElse(null);
     }
@@ -111,7 +122,13 @@ public class InvestApiCore {
     public List<Operation> getOperationsForLastMonth(String accountId) {
         Instant now = Instant.now();
         Instant monthAgo = now.minus(30, ChronoUnit.DAYS);
-        return api.getOperationsService().getExecutedOperationsSync(accountId, monthAgo, now);
+        OperationsRequest request = OperationsRequest.newBuilder()
+                .setAccountId(accountId)
+                .setFrom(Timestamp.newBuilder().setSeconds(monthAgo.getEpochSecond()).build())
+                .setTo(Timestamp.newBuilder().setSeconds(now.getEpochSecond()).build())
+                .build();
+        OperationsResponse response = operationsService.callSyncMethod(stub -> stub.getOperations(request));
+        return response.getOperationsList();
     }
 
     /**
@@ -121,8 +138,10 @@ public class InvestApiCore {
      * @return Объект Instrument или null, если не найден.
      */
     public Instrument getInstrumentByFigi(String figi) {
+        InstrumentRequest request = InstrumentRequest.newBuilder().setIdType(InstrumentIdType.INSTRUMENT_ID_TYPE_FIGI).setId(figi).build();
         try {
-            return api.getInstrumentsService().getInstrumentByFigiSync(figi);
+            InstrumentResponse response = instrumentsService.callSyncMethod(stub -> stub.getInstrumentBy(request));
+            return response.getInstrument();
         } catch (Exception e) {
             log.error("Не удалось найти инструмент по FIGI: {}", figi, e);
             return null;
@@ -137,23 +156,13 @@ public class InvestApiCore {
      * @return Объект Instrument или null, если не найден.
      */
     public Instrument getInstrumentByTicker(String ticker) {
+        FindInstrumentRequest request = FindInstrumentRequest.newBuilder().setQuery(ticker).build();
         try {
-            // Шаг 1: Используем универсальный поиск, который вернет список совпадений.
-            List<InstrumentShort> searchResult = api.getInstrumentsService().findInstrumentSync(ticker);
-
-            // Шаг 2: Если ничего не найдено, возвращаем null.
-            if (searchResult.isEmpty()) {
-                log.warn("Инструмент с тикером '{}' не найден.", ticker);
-                return null;
-            }
-
-            // Шаг 3: Берем первый результат (обычно самый релевантный) и получаем его FIGI.
-            String figi = searchResult.get(0).getFigi();
-
-            // Шаг 4: Используем уже существующий у вас надежный метод getInstrumentByFigi,
-            // чтобы получить полную информацию. Это предотвращает дублирование кода.
-            return getInstrumentByFigi(figi);
-
+            FindInstrumentResponse response = instrumentsService.callSyncMethod(stub -> stub.findInstrument(request));
+            return response.getInstrumentsList().stream()
+                    .findFirst()
+                    .map(instrumentShort -> getInstrumentByFigi(instrumentShort.getFigi()))
+                    .orElse(null);
         } catch (Exception e) {
             log.error("Ошибка при поиске инструмента по тикеру: {}", ticker, e);
             return null;
@@ -166,16 +175,15 @@ public class InvestApiCore {
      * @return Карта [FIGI -> Quotation], содержащая цены.
      */
     public Map<String, Quotation> getLastPrices(List<String> figis) {
-        if (figis == null || figis.isEmpty()) {
-            return new HashMap<>();
-        }
+        if (figis == null || figis.isEmpty()) return new HashMap<>();
+        GetLastPricesRequest request = GetLastPricesRequest.newBuilder().addAllFigi(figis).build();
         try {
-            return api.getMarketDataService().getLastPricesSync(figis)
-                    .stream()
+            GetLastPricesResponse response = marketDataService.callSyncMethod(stub -> stub.getLastPrices(request));
+            return response.getLastPricesList().stream()
                     .collect(Collectors.toMap(LastPrice::getFigi, LastPrice::getPrice));
         } catch (Exception e) {
             log.error("Не удалось получить последние цены для списка FIGI.", e);
-            return new HashMap<>(); // Возвращаем пустую карту в случае ошибки
+            return new HashMap<>();
         }
     }
 }

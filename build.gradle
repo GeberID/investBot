@@ -17,7 +17,6 @@ java {
 repositories {
     mavenCentral()
 }
-
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     compileOnly 'org.projectlombok:lombok:1.18.36'
@@ -25,8 +24,14 @@ dependencies {
     implementation 'org.telegram:telegrambots-springboot-longpolling-starter:8.0.0'
     annotationProcessor 'org.projectlombok:lombok:1.18.32'
     implementation 'org.springframework.data:spring-data-jpa:3.4.4'
-    implementation 'ru.tinkoff.piapi:java-sdk-core:1.31'
-    implementation 'ru.tinkoff.piapi:java-sdk-storage-csv:1.31'
+    implementation 'ru.tinkoff.piapi:java-sdk-core:1.40'
+    implementation 'ru.tinkoff.piapi:java-sdk-strategy:1.40'
+    implementation 'ru.tinkoff.piapi:java-sdk-storage-core:1.40'
+    implementation 'ru.tinkoff.piapi:java-sdk-grpc-contract:1.40'
+    implementation 'ru.tinkoff.piapi:java-sdk-storage:1.40'
+    implementation 'ru.tinkoff.piapi:java-sdk:1.40'
+    // https://mvnrepository.com/artifact/ru.tinkoff.piapi/java-sdk-basic-example
+    implementation 'ru.tinkoff.piapi:java-sdk-basic-example:1.40'
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'org.aspectj:aspectjweaver:1.9.22'
     implementation 'org.springframework.boot:spring-boot-starter-aop'
